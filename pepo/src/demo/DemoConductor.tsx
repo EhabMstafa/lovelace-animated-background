@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { pepoEvents } from '../core/events'
 import { presence, type PresenceState } from '../core/presence'
+import { workspace, type ToolKind } from '../core/workspace'
 
 /**
  * DEMO ONLY: a stand-in for PEPO's runtime so the visual layer can be
@@ -9,8 +10,34 @@ import { presence, type PresenceState } from '../core/presence'
  * and drives `presence` itself.
  */
 
-const SAMPLE_UTTERANCE = 'Find the latest GLM inference benchmarks and compare them with last month'
+const SAMPLE_UTTERANCE = 'Plan a seven day trip to Norway with the fjords and Lofoten'
 const SAMPLE_REPLY = 'I found three new results. Want me to keep going?'
+const TASK_REPLY = "Here's a seven-day route through the fjords. Want me to book the trains?"
+const TASK_PATTERN = /norway|trip|travel|plan|route|fjord/i
+
+const ITINERARY = [
+  'Day 1 — Oslo · Opera House, Bygdøy, evening on Aker Brygge',
+  'Day 2 — Bergen Line to Myrdal, Flåm Railway down to the fjord',
+  'Day 3 — Nærøyfjord cruise to Gudvangen, bus to Bergen',
+  'Day 4 — Bergen · Bryggen, Fløyen, fish market',
+  'Day 5 — Drive to Geiranger via Strynefjellet, fjord viewpoints',
+  'Day 6 — Ålesund · Art Nouveau town, Aksla at sunset',
+  'Day 7 — Fly to Bodø, ferry to Lofoten · Reine, Hamnøy',
+]
+const TERMINAL = [
+  '$ trains search --from Oslo --to Myrdal --date +1d',
+  'Bergen Line 08:25 → 13:05 · 3 seats left',
+  '$ ferry schedule nærøyfjord --day 3',
+  'Flåm 09:00 → Gudvangen 11:00',
+  '$ weather forecast bergen geiranger lofoten',
+  'Bergen 12° rain · Geiranger 14° clear · Lofoten 9° wind',
+  '$ route optimise --stops 7 --mode rail,ferry,road',
+  '✓ 1,890 km · 7 days · 3 transfers',
+]
+
+const TITLES: Record<ToolKind, string> = {
+  map: 'Map', notes: 'Notes', terminal: 'Terminal', browser: 'Browser', files: 'Files', code: 'Code', images: 'Images',
+}
 
 export function DemoConductor() {
   useEffect(() => {
@@ -56,6 +83,71 @@ export function DemoConductor() {
 
     // Understand, think, answer. The body (Orb or Avatar) is the viewer's
     // choice; each form plays these states in its own way.
+    /**
+     * The work scene: PEPO understands, thinks, steps aside and opens a map,
+     * notes and a terminal; light flows to each while it writes; then it
+     * answers. The terminal (secondary) collapses once the work is done.
+     */
+    const runTask = () => {
+      set('understanding', { transcript: null })
+      later(1000, () => {
+        set('thinking')
+        later(1400, () => {
+          set('working', { caption: 'Working on it.' })
+          const map = workspace.open('map', 'Norway · route', { progress: 0 })
+          workspace.update(map, { active: true })
+          const t0 = performance.now()
+          const draw = () => {
+            const k = Math.min(1, (performance.now() - t0) / 5600)
+            workspace.update(map, { data: { progress: k } })
+            if (k < 1) later(90, draw)
+            else workspace.update(map, { active: false })
+          }
+          later(400, draw)
+
+          later(900, () => {
+            const notes = workspace.open('notes', 'Itinerary', { heading: 'Norway · 7 days', lines: [] })
+            workspace.update(notes, { active: true })
+            ITINERARY.forEach((line, i) =>
+              later(500 + i * 620, () => {
+                const w = workspace.find('notes')
+                if (!w) return
+                workspace.update(w.id, { data: { lines: [...((w.data.lines as string[]) ?? []), line] } })
+                if (i === ITINERARY.length - 1) workspace.update(w.id, { active: false })
+              }),
+            )
+          })
+
+          later(1700, () => {
+            const term = workspace.open('terminal', 'Terminal', { lines: [] })
+            workspace.update(term, { active: true })
+            TERMINAL.forEach((line, i) =>
+              later(300 + i * 480 + (line.startsWith('$') ? 0 : 160), () => {
+                const w = workspace.find('terminal')
+                if (!w) return
+                workspace.update(w.id, { data: { lines: [...((w.data.lines as string[]) ?? []), line] } })
+                if (i === TERMINAL.length - 1) workspace.update(w.id, { active: false })
+              }),
+            )
+          })
+
+          later(6900, () => {
+            set('speaking', { caption: TASK_REPLY })
+            later(520, () =>
+              speak(4200, () => {
+                set('idle')
+                later(2600, () => {
+                  const w = workspace.find('terminal')
+                  if (w) workspace.close(w.id)
+                })
+                later(4200, () => presence.update({ caption: null }))
+              }),
+            )
+          })
+        })
+      })
+    }
+
     const respond = () => {
       set('understanding', { transcript: null })
       later(1100, () => {
@@ -88,15 +180,35 @@ export function DemoConductor() {
 
     const offStop = pepoEvents.on('voiceStop', () => {
       clear()
-      if (presence.getSnapshot().transcript) later(500, respond)
+      const said = presence.getSnapshot().transcript
+      if (said) later(500, TASK_PATTERN.test(said) ? runTask : respond)
       else set('idle', { transcript: null })
     })
 
     const offText = pepoEvents.on('textSubmit', ({ text }) => {
       clear()
       presence.update({ caption: null, transcript: text })
-      later(900, respond)
+      later(900, TASK_PATTERN.test(text) ? runTask : respond)
     })
+
+    // Tools opened from the dock: the runtime would decide what to show.
+    const offTool = pepoEvents.on('toolOpen', ({ toolId }) => {
+      const kind = toolId as ToolKind
+      if (TITLES[kind]) workspace.open(kind, TITLES[kind])
+    })
+
+    // Review shortcut: W runs the work scene.
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement
+      if (t.tagName === 'INPUT' || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === 'w' || e.key === 'W') {
+        clear()
+        workspace.closeAll()
+        presence.update({ transcript: SAMPLE_UTTERANCE, caption: null })
+        later(600, runTask)
+      }
+    }
+    window.addEventListener('keydown', onKey)
 
     // First breath: PEPO acknowledges you once, then falls silent.
     later(1400, () => presence.update({ caption: "I'm here." }))
@@ -109,6 +221,8 @@ export function DemoConductor() {
       offStart()
       offStop()
       offText()
+      offTool()
+      window.removeEventListener('keydown', onKey)
     }
   }, [])
 

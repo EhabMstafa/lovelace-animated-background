@@ -77,9 +77,9 @@ button:focus-visible, input:focus-visible { outline: 1px solid rgba(75, 200, 255
 /* The Orb's light on the water. Tints with PEPO's mind. */
 .ambient-orb-reflection {
   position: absolute;
-  left: 50%;
+  left: var(--presence-x, 50%);
   top: var(--horizon);
-  width: calc(var(--stage) * 0.24);
+  width: calc(var(--stage) * 0.24 * var(--presence-scale, 1));
   height: 30vh;
   transform: translateX(-50%);
   background:
@@ -88,7 +88,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid rgba(75, 200, 255
   -webkit-mask-image: radial-gradient(ellipse 50% 100% at 50% 0%, #000 0%, transparent 75%);
   mask-image: radial-gradient(ellipse 50% 100% at 50% 0%, #000 0%, transparent 75%);
   filter: blur(1.5px);
-  transition: filter 1.2s var(--ease-in-out), opacity 1.2s var(--ease-in-out);
+  transition: filter 1.2s var(--ease-in-out), opacity 1.2s var(--ease-in-out), left 1.1s var(--ease-out), width 1.1s var(--ease-out);
   animation: shimmer 9s var(--ease-in-out) infinite alternate;
 }
 [data-presence='thinking'] .ambient-orb-reflection { filter: blur(1.5px) hue-rotate(40deg); }
@@ -111,11 +111,12 @@ button:focus-visible, input:focus-visible { outline: 1px solid rgba(75, 200, 255
 .presence-stage {
   position: absolute;
   z-index: 1;
-  left: 50%;
-  top: var(--orb-y);
+  left: var(--presence-x, 50%);
+  top: var(--presence-y, var(--orb-y));
   width: var(--stage);
   height: var(--stage);
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(var(--presence-scale, 1));
+  transition: left 1.1s var(--ease-out), top 1.1s var(--ease-out), transform 1.1s var(--ease-out);
   pointer-events: none;
 }
 .presence-stage canvas { display: block; }
@@ -536,3 +537,140 @@ button:focus-visible, input:focus-visible { outline: 1px solid rgba(75, 200, 255
   .form-label { display: none; }
   .form-option { padding: 0 9px; }
 }
+
+/* ───────── spatial workspace ───────── */
+.workspace { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.light-streams { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+.floating-window {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  overflow: hidden;
+  pointer-events: auto;
+  background: linear-gradient(180deg, rgba(12, 22, 46, 0.72), rgba(7, 14, 30, 0.66));
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  box-shadow:
+    inset 0 1px 0 rgba(200, 225, 255, 0.04),
+    inset 0 0 40px rgba(64, 160, 255, 0.025),
+    0 24px 60px -24px rgba(0, 0, 0, 0.7);
+  transition: box-shadow 0.4s var(--ease-out), border-color 0.4s var(--ease-out), backdrop-filter 0.3s;
+}
+.floating-window.is-active { border-color: rgba(75, 200, 255, 0.16); box-shadow: inset 0 1px 0 rgba(200, 225, 255, 0.05), 0 0 50px -20px rgba(64, 200, 255, 0.3), 0 24px 60px -24px rgba(0, 0, 0, 0.7); }
+.floating-window.is-dragging { backdrop-filter: blur(20px) saturate(130%); -webkit-backdrop-filter: blur(20px) saturate(130%); box-shadow: 0 30px 80px -24px rgba(0, 0, 0, 0.8); }
+
+.window-header {
+  flex: none;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 14px;
+  color: var(--text-muted);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.is-dragging .window-header { cursor: grabbing; }
+.window-title { font-size: 12px; letter-spacing: 0.02em; color: var(--text-secondary); }
+.window-activity {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cyan-soft);
+  box-shadow: 0 0 8px var(--cyan);
+  animation: activity 1.6s var(--ease-in-out) infinite;
+}
+@keyframes activity { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+.window-close {
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  opacity: 0.6;
+  transition: opacity 0.18s, background 0.18s, color 0.18s;
+}
+.window-close:hover { opacity: 1; color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
+.window-body { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+
+/* Map */
+.map-surface { position: absolute; inset: 0 0 0 0; }
+.map-surface svg { width: 100%; height: calc(100% - 30px); display: block; }
+.map-grid { stroke: rgba(120, 160, 255, 0.06); stroke-width: 0.02; }
+.map-coast { stroke: rgba(75, 200, 255, 0.45); stroke-width: 0.035; stroke-linejoin: round; }
+.map-route { fill: none; stroke-width: 0.075; stroke-linecap: round; stroke-linejoin: round; transition: stroke-dashoffset 0.2s linear; }
+.map-route-shadow { fill: none; stroke: rgba(64, 230, 255, 0.25); stroke-width: 0.3; stroke-linecap: round; filter: blur(0.08px); transition: stroke-dashoffset 0.2s linear; }
+.map-stop text { font-size: 0.34px; fill: var(--text-muted); opacity: 0.35; transition: opacity 0.6s, fill 0.6s; font-family: inherit; }
+.map-stop-dot { fill: #67738a; transition: fill 0.5s; }
+.map-stop-halo { fill: rgba(64, 230, 255, 0); transition: fill 0.6s; }
+.map-stop.is-reached text { opacity: 1; fill: var(--text-primary); }
+.map-stop.is-reached .map-stop-dot { fill: #eef4ff; }
+.map-stop.is-reached .map-stop-halo { fill: rgba(64, 230, 255, 0.22); }
+.map-legend { position: absolute; left: 16px; bottom: 10px; display: flex; gap: 14px; font-size: 11px; color: var(--text-muted); }
+.map-legend span:first-child { color: var(--text-secondary); }
+
+/* Notes */
+.notes-surface { position: absolute; inset: 0; padding: 4px 18px 16px; overflow: auto; }
+.notes-surface h3 { margin: 0 0 10px; font-size: 14px; font-weight: 500; color: var(--text-primary); letter-spacing: 0.01em; }
+.notes-surface ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.notes-surface li { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); animation: line-in 0.4s var(--ease-out); }
+.notes-surface li.has-day { display: grid; grid-template-columns: 46px 1fr; gap: 8px; }
+.notes-day { color: var(--cyan-soft); font-size: 11.5px; letter-spacing: 0.02em; padding-top: 1px; }
+@keyframes line-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+
+/* Terminal */
+.terminal-surface {
+  position: absolute;
+  inset: 0;
+  padding: 2px 16px 14px;
+  overflow: auto;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+.term-cmd { color: var(--text-primary); animation: line-in 0.3s var(--ease-out); }
+.term-prompt { color: var(--cyan-soft); }
+.term-out { color: var(--text-muted); animation: line-in 0.3s var(--ease-out); }
+.term-ok { color: #7fd4ff; animation: line-in 0.3s var(--ease-out); }
+
+.caret {
+  display: inline-block;
+  width: 6px;
+  height: 12px;
+  margin-left: 3px;
+  vertical-align: -2px;
+  background: var(--cyan-soft);
+  animation: caret 1s steps(1) infinite;
+}
+@keyframes caret { 50% { opacity: 0; } }
+
+.empty-surface { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; color: var(--text-muted); text-align: center; padding: 20px; }
+.empty-surface p { margin: 0; font-size: 12.5px; max-width: 26ch; line-height: 1.5; }
+
+/* Phone: one surface as a sheet, tabs above it */
+.sheet-tabs { position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; pointer-events: auto; }
+.sheet-tabs button { width: 34px; height: 34px; border-radius: 12px; display: grid; place-items: center; color: var(--text-muted); background: rgba(8, 16, 34, 0.6); border: 1px solid var(--hairline); }
+.sheet-tabs button.is-active { color: var(--cyan-soft); border-color: rgba(75, 200, 255, 0.3); }
+:root[data-workspace='sheet'] .caption { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .presence-stage, .ambient-orb-reflection { transition: none; }
+}
+
+/* With PEPO stepped aside, its words stay with it, under the presence. */
+:root[data-workspace='desktop'] .caption,
+:root[data-workspace='tablet'] .caption {
+  position: absolute;
+  left: var(--presence-x);
+  top: calc(var(--presence-y) + var(--stage) * 0.27);
+  width: min(36vw, 520px);
+  transform: translateX(-50%);
+  margin: 0;
+}
+:root[data-workspace='desktop'] .caption p,
+:root[data-workspace='tablet'] .caption p { font-size: 16px; text-wrap: balance; }

@@ -4,9 +4,11 @@ The visual layer for PEPO, a local-first, voice-first intelligent presence.
 It has no backend. The runtime drives it through a small presence store and
 an event bus.
 
-**Status:** Scene 1 (Presence) and the core of Scene 2 (Conversation) are in
-place: the Orb, the point-cloud Avatar and the Orb ↔ Avatar transition.
-Scene 3 (spatial workspace windows) is next.
+**Status:** all three scenes of the prototype are in place:
+1. **Presence:** the Orb or FATHI, with the header toggle.
+2. **Conversation:** voice states and natural human motion.
+3. **Work:** a spatial workspace where PEPO steps aside, places tools and
+   sends light to them.
 
 ```bash
 cd pepo
@@ -21,6 +23,9 @@ npm run build    # typecheck + production build into dist/
 | --- | --- |
 | Click the mic, or press **Space** | Listen. A demo transcript plays, then PEPO understands, thinks and answers in whichever form is selected |
 | Press **/**, or click the keyboard icon | Type instead of talking |
+| Say or type "plan a trip to Norway", or press **W** | The work scene: PEPO steps aside and opens a map, notes and a terminal |
+| Click a tool in the dock | Opens that tool as a surface |
+| Press **Esc** (when not listening or typing) | Puts the work away; PEPO returns to the centre |
 | Press **1–7**, or use the state label in the corner | Jump straight to a presence state for review |
 | **Orb / Avatar** toggle in the header, or press **A** | Choose which body PEPO wears (remembered per browser); switching cross-fades between them |
 | Move the pointer to the left edge | Reveal the navigation rail |
@@ -36,6 +41,7 @@ src/
 ├─ core/
 │  ├─ presence.ts               presence store: state, form, energy, caption, transcript
 │  ├─ events.ts                 UI intents: voiceStart, voiceStop, textSubmit, toolOpen…
+│  ├─ workspace.ts              workspace store: open, update, close tools and their content
 │  └─ tokens.ts                 colours, durations, easing
 ├─ presence/
 │  ├─ PresenceLayer.tsx         R3F canvas (demand frameloop, paced by FrameGovernor)
@@ -49,6 +55,12 @@ src/
 │  │  └─ shaders.ts             FATHI's strands (neck flow, throat, shoulder links, jaw guide)
 │  ├─ lines.ts                  screen-space ribbon lines (constant pixel width, soft glow)
 │  └─ glsl.ts                   shared palette, helpers, FATHI's rig and the Avatar's colour
+├─ workspace/
+│  ├─ SpatialWorkspace.tsx      renders surfaces, moves PEPO aside, Esc to put work away
+│  ├─ layout.ts                 where PEPO and each surface go (desktop, tablet, phone sheet)
+│  ├─ FloatingWindow.tsx        surfaces that grow from PEPO's light and collapse back to it
+│  ├─ LightStreams.tsx          particles of light from PEPO to the surface it is working on
+│  └─ surfaces/                 Map (route drawing itself), Notes, Terminal, empty states
 ├─ voice/                       VoiceSurface, Waveform, Transcript, PresenceCaption, mic energy
 ├─ chrome/                      GlobalHeader, PresenceToggle, NavigationRail, AdaptiveDock
 ├─ background/                  AmbientBackground (night lake at ~5–10% intensity)
@@ -74,6 +86,35 @@ runtime.onAudioLevel((v) => presence.setEnergy(v))            // 0..1, read at f
 
 Then render `<PEPOApp demo={false} />` and pass `captureMic={false}` to
 `VoiceSurface` if the runtime supplies its own audio level.
+
+### Spatial workspace
+
+With nothing open, the workspace is empty and PEPO sits in the centre. When
+PEPO acts:
+- **PEPO steps aside:** the Orb or Avatar glides left and scales down.
+- **Surfaces arrive:** each one grows out of PEPO's light (it scales up from
+  the corner nearest PEPO) and the arrangement settles around the task.
+- **Layout:** one large surface, then a large surface over a smaller one,
+  then a large surface over two side by side, then a grid.
+- **Light streams:** fine particles travel from PEPO to a surface when it
+  appears and for as long as PEPO is writing into it, marked by a small
+  pulse in the surface's label.
+- **Surfaces:** a hairline border, a whisper of glass, a small label and a
+  quiet close button. The header is the drag handle, and there is no OS
+  chrome.
+- **Putting it away:** closing every surface (or pressing Esc) returns PEPO
+  to the centre.
+- **Phones:** PEPO rises to the top, and the newest tool opens as a bottom
+  sheet with small tabs to switch between surfaces.
+
+The runtime drives it through `workspace`:
+
+```ts
+const id = workspace.open('map', 'Norway · route', { progress: 0 })
+workspace.update(id, { active: true, data: { progress: 0.4 } })
+workspace.close(id)
+pepoEvents.on('toolOpen', ({ toolId }) => /* user clicked a dock tool */)
+```
 
 ### Orb state language
 

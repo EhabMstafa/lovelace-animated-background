@@ -7,6 +7,7 @@ import { usePresence } from '../core/presence'
 import { DemoConductor } from '../demo/DemoConductor'
 import { StatePicker } from '../demo/StatePicker'
 import { PresenceLayer } from '../presence/PresenceLayer'
+import { SpatialWorkspace } from '../workspace/SpatialWorkspace'
 import { PresenceCaption } from '../voice/PresenceCaption'
 import { VoiceSurface } from '../voice/VoiceSurface'
 
@@ -45,10 +46,10 @@ interface PEPOAppProps {
 }
 
 /**
- * Scene 1: Presence. Three depth planes:
+ * PEPO. Three depth planes:
  *   far  – AmbientBackground
- *   mid  – PresenceLayer (the Orb)
- *   near – header, caption, voice surface, dock, navigation
+ *   mid  – PresenceLayer (the Orb or the Avatar)
+ *   near – SpatialWorkspace (tools PEPO places), header, caption, voice surface, dock, navigation
  */
 export function PEPOApp({ demo = true }: PEPOAppProps) {
   const compact = useCompact()
@@ -59,6 +60,7 @@ export function PEPOApp({ demo = true }: PEPOAppProps) {
     <div className="pepo" data-presence={state}>
       <AmbientBackground />
       <PresenceLayer compact={compact} />
+      <SpatialWorkspace />
 
       <GlobalHeader />
       {!compact && <NavigationRail />}
