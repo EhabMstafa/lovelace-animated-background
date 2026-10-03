@@ -6,25 +6,21 @@ const ENERGY_STATES = new Set<PresenceState>(['listening', 'speaking'])
 
 /**
  * DEMO ONLY: review tool for the presence language. Keys 1–7 switch
- * states, A switches between Orb and Avatar; the corner label reveals the list.
+ * states; the corner label reveals the list. (A, Orb/Avatar, lives in the header toggle.)
  */
 export function StatePicker() {
-  const { state, form } = usePresence()
+  const { state } = usePresence()
   const [open, setOpen] = useState(false)
 
   const pick = (s: PresenceState) => {
     presence.update({ state: s, caption: null, transcript: null })
   }
-  const toggleForm = () => {
-    const current = presence.getSnapshot().form
-    presence.update({ form: current === 'orb' ? 'avatar' : 'orb' })
-  }
+
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
       if (t.tagName === 'INPUT' || e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key === 'a' || e.key === 'A') return toggleForm()
       const n = Number(e.key)
       if (n >= 1 && n <= PRESENCE_STATES.length) pick(PRESENCE_STATES[n - 1])
     }
@@ -69,21 +65,11 @@ export function StatePicker() {
                 </button>
               </li>
             ))}
-            <li className="state-picker-divider" aria-hidden="true" />
-            <li>
-              <button className={form === 'avatar' ? 'is-active' : ''} onClick={toggleForm}>
-                <kbd>A</kbd>
-                {form === 'avatar' ? 'Avatar' : 'Orb'}
-              </button>
-            </li>
           </motion.ul>
         )}
       </AnimatePresence>
       <button className="state-picker-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label="Presence states (demo)">
-        <span>
-          {state}
-          {form === 'avatar' ? ' · avatar' : ''}
-        </span>
+        <span>{state}</span>
       </button>
     </div>
   )

@@ -19,10 +19,10 @@ npm run build    # typecheck + production build into dist/
 
 | Input | Effect |
 | --- | --- |
-| Click the mic, or press **Space** | Listen. A demo transcript plays; PEPO understands as the Orb, opens into its face to answer, then returns to the Orb |
+| Click the mic, or press **Space** | Listen. A demo transcript plays, then PEPO understands, thinks and answers in whichever form is selected |
 | Press **/**, or click the keyboard icon | Type instead of talking |
 | Press **1–7**, or use the state label in the corner | Jump straight to a presence state for review |
-| Press **A** | Switch between the Orb and the Avatar |
+| **Orb / Avatar** toggle in the header, or press **A** | Choose which body PEPO wears (remembered per browser); switching plays the transformation |
 | Move the pointer to the left edge | Reveal the navigation rail |
 
 When microphone access is granted, the Orb and the waveform react to your
@@ -50,7 +50,7 @@ src/
 │  ├─ lines.ts                  screen-space ribbon lines (constant pixel width, soft glow)
 │  └─ glsl.ts                   shared palette, helpers and the Avatar's pose
 ├─ voice/                       VoiceSurface, Waveform, Transcript, PresenceCaption, mic energy
-├─ chrome/                      GlobalHeader, NavigationRail, AdaptiveDock
+├─ chrome/                      GlobalHeader, PresenceToggle, NavigationRail, AdaptiveDock
 ├─ background/                  AmbientBackground (night lake at ~5–10% intensity)
 └─ demo/                        DemoConductor + StatePicker (remove when the runtime connects)
 ```
@@ -99,7 +99,17 @@ the top of the Orb becomes the crown and the bottom becomes the shoulders.
 During the 1.5 s transformation, each particle leaves on its own schedule,
 loosens into a swirl and condenses into the head. The glass, orbits and
 streams fade out, and then the face's traces draw themselves in along their
-length. Set `presence.update({ form: 'avatar' | 'orb' })` to trigger it.
+length.
+
+The form is the viewer's choice (`PresenceToggle`, or
+`presence.update({ form: 'avatar' | 'orb' })`). It never changes on its own,
+and each form plays every presence state in its own way:
+
+| State | Orb | Avatar |
+| --- | --- | --- |
+| listening | leans in, a ripple runs through, outer motes and orbits follow the voice | turns toward you and leans in; sound ripples inward from the ears |
+| thinking | violet joins, interior particles travel, inner streams appear | the silhouette thins, light gathers at the forehead and eyes |
+| speaking | light waves from the core to the surface, streams surge with speech | the jaw moves softly under the mask, light flows down the mask weave, small nods |
 
 The head is a real 3D head scan (see the credit below), sampled into about
 42,000 particles (20,000 on phones). Density follows the surface area, plus
@@ -119,10 +129,8 @@ On top of the particles:
 - **Strands:** slices around the vertical axis through the neck and
   shoulders, so lines run down the neck and fan out over the shoulders.
 
-The Avatar's motion language: breathing, small head movements, occasional
-eye shifts, the sides of the face reacting while it listens, a soft wave
-down the mask while it speaks, and light gathering at the forehead while it
-thinks.
+At rest the Avatar breathes, makes small head movements and shifts its gaze
+now and then.
 
 ### Credits
 

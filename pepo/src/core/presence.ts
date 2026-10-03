@@ -23,7 +23,7 @@ export const PRESENCE_STATES: readonly PresenceState[] = [
   'waiting',
 ]
 
-/** Which body PEPO currently inhabits. Only `orb` exists in Scene 1. */
+/** Which body PEPO wears: the ambient Orb or the point-cloud Avatar. */
 export type PresenceForm = 'orb' | 'avatar'
 
 export interface PresenceSnapshot {

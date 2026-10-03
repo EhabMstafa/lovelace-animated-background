@@ -10,6 +10,10 @@ export const traceVertex = /* glsl */ `
   attribute float aKind;
   attribute vec3 aNormal;
   uniform float uReveal;
+  uniform float uTime;
+  uniform float uListen;
+  uniform float uSpeak;
+  uniform float uEnergy;
   varying float vAlpha;
   varying vec3 vColor;
   varying float vT;
@@ -33,6 +37,10 @@ export const traceVertex = /* glsl */ `
            * (0.35 + 0.65 * light.x + 0.5 * light.y + 0.5 * light.z)
            * mix(0.08, 1.0, light.w)
            * smoothstep(-1.38, -1.02, position.y) * (1.0 - smoothstep(0.7, 1.05, abs(position.x)));
+    // Voice: the mask weave carries speech downward; contours near the ears carry listening.
+    float voice = uSpeak * uEnergy * (0.5 + 0.5 * sin(position.y * 26.0 + uTime * 6.5));
+    float hear = uListen * uEnergy * smoothstep(0.2, 0.45, abs(position.x)) * (0.5 + 0.5 * sin((0.5 - abs(position.x)) * 34.0 + uTime * 7.0));
+    vAlpha *= 1.0 + (mask + edge) * voice * 1.4 + contour * hear * 2.5;
     vT = aT;
   }
 `

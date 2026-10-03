@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { PresenceToggle } from './PresenceToggle'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -35,6 +36,7 @@ export function GlobalHeader({ userInitial = 'E' }: GlobalHeaderProps) {
       </div>
 
       <div className="flex items-center gap-5 text-[12px] text-[var(--text-secondary)]">
+        <PresenceToggle />
         <span className="flex items-center gap-2" title="Running on this device. Nothing leaves it.">
           <span className="local-dot" />
           <span className="hidden sm:inline">Local</span>

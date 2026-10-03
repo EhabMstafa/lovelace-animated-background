@@ -247,7 +247,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       additive({
         vertexShader: traceVertex,
         fragmentShader: traceFragment,
-        uniforms: { uReveal: { value: 0 }, ...pose },
+        uniforms: { uReveal: { value: 0 }, uTime: { value: 0 }, uListen: { value: 0 }, uSpeak: { value: 0 }, uEnergy: { value: 0 }, ...pose },
       }),
     [pose],
   )
@@ -308,8 +308,15 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     // The face's own life: breath, small head movements, eye attention.
     const ptr = reducedMotion ? { x: 0, y: 0 } : getPointer()
     // A gentle three-quarter turn, so the face reads as a form, never a cut-out.
-    c.yaw = damp(c.yaw, -0.42 + Math.sin(c.t * 0.11) * 0.08 + Math.sin(c.t * 0.29) * 0.025 + ptr.x * 0.12, 0.8, dt)
-    c.pitch = damp(c.pitch, Math.sin(c.t * 0.15) * 0.025 - p.listen * 0.035 + ptr.y * 0.04, 0.8, dt)
+    // Listening, PEPO turns toward you and leans in; speaking, it nods softly.
+    const turn = -0.42 * (1 - p.listen * 0.6)
+    c.yaw = damp(c.yaw, turn + Math.sin(c.t * 0.11) * 0.08 * (1 - p.listen * 0.5) + Math.sin(c.t * 0.29) * 0.025 + ptr.x * 0.12, 0.8, dt)
+    c.pitch = damp(
+      c.pitch,
+      Math.sin(c.t * 0.15) * 0.025 - p.listen * 0.07 + p.speak * c.energy * 0.03 * Math.sin(c.t * 3.1) + ptr.y * 0.04,
+      0.5,
+      dt,
+    )
     if (c.t > c.gazeAt) {
       c.gazeAt = c.t + 2.2 + Math.random() * 3.5
       c.gtx = (Math.random() - 0.5) * 2
@@ -335,6 +342,10 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     u.uMorph.value = m
     u.uGaze.value.set(c.gx, c.gy)
     traceMat.uniforms.uReveal.value = THREE.MathUtils.smoothstep(m, 0.55, 1)
+    traceMat.uniforms.uTime.value = c.t
+    traceMat.uniforms.uListen.value = p.listen
+    traceMat.uniforms.uSpeak.value = p.speak
+    traceMat.uniforms.uEnergy.value = c.energy
 
     if (spinGroup.current) {
       spinGroup.current.rotation.y = c.rot
@@ -344,7 +355,8 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
 
     streamMat.uniforms.uTime.value = c.t
     streamMat.uniforms.uAlpha.value = (0.95 + p.organize * 0.25) * p.glow
-    streamMat.uniforms.uPulse.value = 0.35 + p.organize * 0.5 + p.activity * 0.3
+    // The Orb's own voice: streams surge with speech, orbits brighten while listening.
+    streamMat.uniforms.uPulse.value = 0.35 + p.organize * 0.5 + p.activity * 0.3 + p.speak * c.energy * 0.9 + p.listen * c.energy * 0.4
     streamMat.uniforms.uViolet.value = p.violet
     innerStreamMat.uniforms.uTime.value = c.t * 1.3
     innerStreamMat.uniforms.uAlpha.value = Math.max(0, p.depth - 0.3) * 0.35
@@ -366,7 +378,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       const group = orbitRefs.current[i]
       const mat = orbitMats[i]
       mat.uniforms.uHead.value = (mat.uniforms.uHead.value + dt * timeScale * o.speed * (1 + p.activity * 0.8)) % 1
-      mat.uniforms.uAlpha.value = o.alpha * (1 + p.organize * 0.6) * p.glow
+      mat.uniforms.uAlpha.value = o.alpha * (1 + p.organize * 0.6 + p.listen * c.energy * 0.8 + p.speak * c.energy * 0.5) * p.glow
       mat.uniforms.uViolet.value = p.violet
       const nodeMat = nodeMats[i]
       nodeMat.uniforms.uTime.value = c.t

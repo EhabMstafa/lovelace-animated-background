@@ -118,13 +118,20 @@ export const bodyVertex = /* glsl */ `
     float life = fract(t * (0.035 + 0.03 * aSeed.y) + aSeed.x);
     f += n * dust * life * 0.12;
 
-    // Listening: the sides of the face, near the ears, respond to the voice.
+    // Listening: sound arrives at the ears and ripples inward across the face.
     float ear = gauss(length(vec2(abs(f.x) - 0.45, f.y + 0.2)), 0.16);
-    f += n * ear * uListen * uEnergy * 0.03 * (0.5 + 0.5 * sin(t * 9.0 + f.y * 30.0));
+    float inward = 0.5 + 0.5 * sin((0.5 - abs(f.x)) * 34.0 + t * 7.0);
+    float hear = uListen * uEnergy * smoothstep(0.05, 0.4, abs(f.x)) * step(-0.75, f.y);
+    f += n * (ear * 0.035 + inward * 0.008) * hear;
 
-    // Speaking: a soft wave runs down the mask, nothing like lip sync.
+    // Speaking: energy flows down the mask and the jaw beneath it moves
+    // softly with the voice. Never lip sync.
     float mw = 0.5 + 0.5 * sin(f.y * 26.0 + t * 6.5);
-    f += n * mask * uSpeak * uEnergy * 0.01 * mw;
+    float voice = uSpeak * uEnergy;
+    float jaw = mask * smoothstep(-0.36, -0.6, f.y);
+    f += n * mask * voice * 0.012 * mw;
+    f.y -= jaw * voice * 0.016;
+    f.z += jaw * voice * 0.006;
 
     // Eye attention.
     float eye = gauss(length(vec2(abs(f.x) - 0.17, f.y + 0.05)), 0.05) * step(0.4, f.z);
@@ -166,8 +173,10 @@ export const bodyVertex = /* glsl */ `
     alpha *= 1.0 + uDepth * 0.9 * mind;
     alpha *= 1.0 - uDepth * 0.4 * fres * skin;
     // Listening and speaking brighten where the response lives.
-    alpha *= 1.0 + ear * uListen * (0.3 + uEnergy);
-    alpha *= 1.0 + mask * uSpeak * uEnergy * 0.5 * mw;
+    alpha *= 1.0 + ear * uListen * (0.3 + uEnergy) + hear * inward * 0.9;
+    alpha *= 1.0 + mask * voice * 0.9 * mw;
+    alpha *= 1.0 + strand * voice * 0.6 * (0.5 + 0.5 * sin(base.y * 18.0 + t * 6.0));
+    color = mix(color, C_CYAN, hear * inward * 0.5);
 
     alpha *= mix(0.12, 1.0, front);
     alpha *= smoothstep(-1.38, -1.02, base.y) * (1.0 - smoothstep(0.7, 1.05, abs(base.x)));

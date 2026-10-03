@@ -1,4 +1,4 @@
-import type { PresenceState } from './presence'
+import type { PresenceForm, PresenceState } from './presence'
 
 /**
  * Integration surface between the visual layer and PEPO's runtime.
@@ -15,6 +15,8 @@ export interface PEPOEventMap {
   toolClose: { toolId: string }
   navigate: { destination: string }
   presenceChange: { from: PresenceState; to: PresenceState }
+  /** The viewer chose which body PEPO wears. */
+  formChange: { form: PresenceForm }
   workspaceAction: { action: string; payload?: unknown }
 }
 
