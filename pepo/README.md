@@ -43,9 +43,10 @@ src/
 │  ├─ body/particleShaders.ts   one particle system, two arrangements (Orb / Avatar) and the morph
 │  ├─ orb/                      state language, geometry, glass/stream/orbit/star shaders
 │  ├─ avatar/
-│  │  ├─ headModel.ts           SDF-sculpted head + mask, sampled into a point cloud with traces
+│  │  ├─ assets/head.bin        compact 3D head scan (built by scripts/build-head.mjs)
+│  │  ├─ scanHead.ts            scan → lit point cloud, draped mask, contours, creases, strands
 │  │  ├─ headWorker.ts          builds the cloud off the main thread
-│  │  └─ shaders.ts             hairline traces (eyes, brows, ears, mask weave, neck strands)
+│  │  └─ shaders.ts             hairline traces (contours, eyelids, ears, mask weave, neck strands)
 │  ├─ lines.ts                  screen-space ribbon lines (constant pixel width, soft glow)
 │  └─ glsl.ts                   shared palette, helpers and the Avatar's pose
 ├─ voice/                       VoiceSurface, Waveform, Transcript, PresenceCaption, mic energy
@@ -100,18 +101,40 @@ loosens into a swirl and condenses into the head. The glass, orbits and
 streams fade out, and then the face's traces draw themselves in along their
 length. Set `presence.update({ form: 'avatar' | 'orb' })` to trigger it.
 
-The head is sculpted procedurally as a signed distance field: cranium, face,
-jaw, brow, eye sockets, nose, ears, neck and shoulders, plus a separate mask
-shell. Nothing is loaded from asset files. Point density is weighted toward
-the eyes, nose bridge, cheeks, mask, jaw and neck, and fades toward the
-silhouette, where loose motes drift away. The Avatar has its own motion
-language: breathing, small head movements, occasional eye shifts, the sides
-of the face reacting while it listens, a soft wave down the mask while it
-speaks, and light gathering at the forehead while it thinks.
+The head is a real 3D head scan (see the credit below), sampled into about
+42,000 particles (20,000 on phones). Density follows the surface area, plus
+the places a viewer reads first: the eyes, brow, nose bridge, cheekbones,
+ears, jaw and neck. Every particle is lit like a sculpture by a cool key
+light from the upper left, a violet rim light from behind, and a cyan edge
+at the silhouette. That lighting is what makes it read as 3D. The head sits
+in a gentle three-quarter turn and sways slightly, so its depth is always
+visible.
+
+On top of the particles:
+- **Mask:** a height field of the real face, dilated and smoothed so it
+  drapes like cloth over the nose and lips. It has a bright edge, a centre
+  seam, woven lines and straps to the ears.
+- **Contours:** horizontal slices across the skull and brow, like a 3D scan.
+- **Creases:** the sharp edges of the scan around the eyelids and ears.
+- **Strands:** slices around the vertical axis through the neck and
+  shoulders, so lines run down the neck and fan out over the shoulders.
+
+The Avatar's motion language: breathing, small head movements, occasional
+eye shifts, the sides of the face reacting while it listens, a soft wave
+down the mask while it speaks, and light gathering at the forehead while it
+thinks.
+
+### Credits
+
+Head model: "Lee Perry-Smith" head scan by
+[Infinite-Realities](https://www.ir-ltd.net), licensed
+[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), via the three.js
+examples. `scripts/build-head.mjs` converts it into
+`src/presence/avatar/assets/head.bin`.
 
 ### Performance
 
-- One draw call for all 9,000 body particles (5,200 on phones), with all motion computed on the GPU.
+- One draw call for all 42,000 body particles (20,000 on phones), with all motion computed on the GPU.
 - The head cloud is built in a Web Worker after the Orb is already on screen.
 - Orb-only layers stop drawing while the Avatar is shown.
 - `frameloop="demand"` redraws at 30 fps in calm states and 60 fps in active ones. Nothing is drawn while the tab is hidden.

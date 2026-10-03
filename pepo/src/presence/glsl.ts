@@ -37,12 +37,28 @@ export const facePose = /* glsl */ `
   uniform vec3 uFaceOffset;
 
   vec3 poseFace(vec3 f, inout vec3 n) {
-    float headW = smoothstep(-0.8, -0.42, f.y);
-    f.y += uPose.z * (0.008 * (1.0 - headW) + 0.004 * headW);
-    vec3 pivot = vec3(0.0, -0.5, -0.05);
+    float headW = smoothstep(-1.0, -0.6, f.y);
+    f.y += uPose.z * (0.009 * (1.0 - headW) + 0.004 * headW);
+    vec3 pivot = vec3(0.0, -0.85, 0.0);
     mat3 r = yawPitch(uPose.x * headW, uPose.y * headW);
     f = r * (f - pivot) + pivot;
     n = r * n;
     return (f - uFaceOffset) * uFaceScale;
+  }
+`
+
+/**
+ * Studio lighting for the Avatar, fixed relative to the camera: a cool key
+ * light from the upper left, a violet rim from behind on the right, and a
+ * cyan fresnel edge. This is what makes the cloud read as a 3D form.
+ */
+export const faceLight = /* glsl */ `
+  const vec3 KEY_DIR = normalize(vec3(-0.5, 0.45, 0.75));
+  const vec3 RIM_DIR = normalize(vec3(0.8, 0.2, -0.55));
+  vec4 faceLighting(vec3 vn) {
+    float diffuse = max(dot(vn, KEY_DIR), 0.0);
+    float fres = pow(1.0 - clamp(vn.z, 0.0, 1.0), 2.4);
+    float rim = max(dot(vn, RIM_DIR), 0.0);
+    return vec4(diffuse, fres, rim, step(-0.05, vn.z));
   }
 `

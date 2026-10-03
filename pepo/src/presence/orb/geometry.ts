@@ -118,36 +118,37 @@ export function assignFaceTargets(geo: THREE.BufferGeometry, face: FaceData) {
 }
 
 /**
- * Light streams: long, gently bending arcs inside the glass, like field
- * lines. Returned as point lists for ribbon geometry.
+ * Light streams: bundles of long ribbons flowing around one shared, tilted
+ * axis, like field lines. Streams in a bundle run side by side, so the
+ * light inside the glass reads as one coherent current, not a scribble.
+ * Returned as point lists for ribbon geometry.
  */
-export function createStreams(count: number, seed: number, rMin: number, rMax: number, segments = 90) {
+export function createStreams(bundles: number, perBundle: number, seed: number, rMin: number, rMax: number, segments = 110) {
   const rand = mulberry32(seed)
   const lines: THREE.Vector3[][] = []
-  const start = new THREE.Vector3()
-  const axis = new THREE.Vector3()
-  const q = new THREE.Quaternion()
-  const qb = new THREE.Quaternion()
-  for (let c = 0; c < count; c++) {
-    randomDir(rand, start)
-    randomDir(rand, axis)
-    axis.sub(start.clone().multiplyScalar(axis.dot(start))).normalize()
-    const bendAxis = start.clone()
-    const len = 1.4 + rand() * 1.6
-    const bend = (rand() - 0.5) * 1.3
-    const r0 = rMin + rand() * (rMax - rMin)
-    const dip = rand() * 0.12
-    const line: THREE.Vector3[] = []
-    for (let s = 0; s <= segments; s++) {
-      const t = s / segments
-      q.setFromAxisAngle(axis, t * len)
-      qb.setFromAxisAngle(bendAxis, Math.sin(t * Math.PI) * bend)
-      const p = start.clone().applyQuaternion(q).applyQuaternion(qb)
-      // Streams sink slightly into the glass mid-way, like light under a surface.
-      p.multiplyScalar(r0 * (1 - dip * Math.sin(t * Math.PI)))
-      line.push(p)
+  const axis = new THREE.Vector3(0.38, 1, 0.22).normalize()
+  const frame = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis)
+  for (let b = 0; b < bundles; b++) {
+    const lat0 = -0.75 + (1.5 * (b + 0.5)) / bundles + (rand() - 0.5) * 0.2
+    const lon0 = rand() * Math.PI * 2
+    const len = 2.2 + rand() * 1.4
+    const waveAmp = 0.18 + rand() * 0.22
+    const waveFreq = 0.8 + rand() * 0.9
+    for (let k = 0; k < perBundle; k++) {
+      const spread = (k - (perBundle - 1) / 2) * (0.045 + rand() * 0.02)
+      const r = rMin + rand() * (rMax - rMin)
+      const startT = rand() * 0.25
+      const endT = 0.75 + rand() * 0.25
+      const line: THREE.Vector3[] = []
+      for (let s = 0; s <= segments; s++) {
+        const t = startT + (endT - startT) * (s / segments)
+        const lon = lon0 + t * len
+        const lat = lat0 + spread + Math.sin(t * Math.PI * waveFreq + b) * waveAmp
+        const p = new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon))
+        line.push(p.multiplyScalar(r).applyQuaternion(frame))
+      }
+      lines.push(line)
     }
-    lines.push(line)
   }
   return lines
 }

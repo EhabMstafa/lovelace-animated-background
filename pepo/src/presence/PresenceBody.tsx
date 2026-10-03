@@ -87,8 +87,8 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
 
   // ── Geometry ──
   const particleGeo = useMemo(() => createOrbParticles(counts), [counts])
-  const streamGeo = useMemo(() => createRibbonGeometry(createStreams(13, 11, 0.86, 0.985)), [])
-  const innerStreamGeo = useMemo(() => createRibbonGeometry(createStreams(6, 23, 0.45, 0.7, 70)), [])
+  const streamGeo = useMemo(() => createRibbonGeometry(createStreams(4, 4, 11, 0.88, 0.985)), [])
+  const innerStreamGeo = useMemo(() => createRibbonGeometry(createStreams(3, 3, 23, 0.45, 0.7, 80)), [])
   const orbitGeos = useMemo(() => ORBITS.map((o) => createRibbonGeometry([ellipsePoints(o.r[0], o.r[1])], true)), [])
   const starGeo = useMemo(() => createStarNodes(9, 5), [])
   const nodeGeo = useMemo(() => {
@@ -123,8 +123,8 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
   const pose = useMemo(
     () => ({
       uPose: { value: new THREE.Vector3() },
-      uFaceScale: { value: 1.55 },
-      uFaceOffset: { value: new THREE.Vector3(0, -0.2, 0) },
+      uFaceScale: { value: 1.45 },
+      uFaceOffset: { value: new THREE.Vector3(0, -0.32, 0.05) },
     }),
     [],
   )
@@ -175,7 +175,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
         uFade: fade,
       },
     })
-  const streamMat = useMemo(() => makeStreamMat(0.3, 7), [pixelRatio])
+  const streamMat = useMemo(() => makeStreamMat(0.3, 16), [pixelRatio])
   const innerStreamMat = useMemo(() => makeStreamMat(0, 3.5), [pixelRatio])
 
   const orbitMats = useMemo(
@@ -220,7 +220,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       additive({
         vertexShader: skinVertex,
         fragmentShader: skinFragment,
-        uniforms: { uGlow: { value: 1 }, uViolet: { value: 0 }, uSpeak: { value: 0 }, uDepth: { value: 0 }, uFade: fade },
+        uniforms: { uGlow: { value: 1 }, uViolet: { value: 0 }, uSpeak: { value: 0 }, uDepth: { value: 0 }, uTime: { value: 0 }, uFade: fade },
       }),
     [fade],
   )
@@ -307,7 +307,8 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
 
     // The face's own life: breath, small head movements, eye attention.
     const ptr = reducedMotion ? { x: 0, y: 0 } : getPointer()
-    c.yaw = damp(c.yaw, Math.sin(c.t * 0.11) * 0.06 + Math.sin(c.t * 0.29) * 0.02 + ptr.x * 0.07, 0.8, dt)
+    // A gentle three-quarter turn, so the face reads as a form, never a cut-out.
+    c.yaw = damp(c.yaw, -0.42 + Math.sin(c.t * 0.11) * 0.08 + Math.sin(c.t * 0.29) * 0.025 + ptr.x * 0.12, 0.8, dt)
     c.pitch = damp(c.pitch, Math.sin(c.t * 0.15) * 0.025 - p.listen * 0.035 + ptr.y * 0.04, 0.8, dt)
     if (c.t > c.gazeAt) {
       c.gazeAt = c.t + 2.2 + Math.random() * 3.5
@@ -342,7 +343,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     }
 
     streamMat.uniforms.uTime.value = c.t
-    streamMat.uniforms.uAlpha.value = (0.42 + p.organize * 0.25) * p.glow
+    streamMat.uniforms.uAlpha.value = (0.95 + p.organize * 0.25) * p.glow
     streamMat.uniforms.uPulse.value = 0.35 + p.organize * 0.5 + p.activity * 0.3
     streamMat.uniforms.uViolet.value = p.violet
     innerStreamMat.uniforms.uTime.value = c.t * 1.3
@@ -352,6 +353,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     starMat.uniforms.uTime.value = c.t
     starMat.uniforms.uAlpha.value = (0.75 + p.organize * 0.25) * p.glow * orbVisible
 
+    skinMat.uniforms.uTime.value = c.t
     skinMat.uniforms.uGlow.value = p.glow
     skinMat.uniforms.uViolet.value = p.violet
     skinMat.uniforms.uSpeak.value = p.speak * c.energy

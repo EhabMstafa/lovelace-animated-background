@@ -100,8 +100,8 @@ export const ribbonVertex = /* glsl */ `
 export const ribbonProfile = /* glsl */ `
   float ribbonProfile(float side) {
     float d = abs(side);
-    float core = smoothstep(0.32, 0.0, d);
-    float glow = pow(1.0 - d, 2.4) * 0.45;
+    float core = smoothstep(0.28, 0.0, d);
+    float glow = pow(1.0 - d, 2.2) * 0.5;
     return core + glow;
   }
 `

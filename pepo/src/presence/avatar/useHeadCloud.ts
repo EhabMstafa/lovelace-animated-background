@@ -1,16 +1,9 @@
 import { useEffect, useState } from 'react'
 import HeadWorker from './headWorker?worker&inline'
 
-export interface HeadCloudData {
-  position: Float32Array
-  normal: Float32Array
-  kind: Float32Array
-  weight: Float32Array
-  traceSegments: Float32Array
-  traceT: Float32Array
-  traceKind: Float32Array
-  traceNormal: Float32Array
-}
+import type { HeadCloud } from './scanHead'
+
+export type HeadCloudData = HeadCloud
 
 /**
  * Sculpts the Avatar in a worker once the Orb is already on screen.
