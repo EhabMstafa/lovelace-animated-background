@@ -122,10 +122,6 @@ The appearance is exactly FATHI's original:
   space).
 - **Rendering:** the same lip line, ear and temple finish, depth falloff and
   crisp point shape.
-- **Solid body:** the drawing's own silhouette, filled, smoothed and baked
-  with FATHI's depth. It is drawn opaque behind the points and follows the
-  same rig, so the avatar is always a solid, complete person and never a
-  see-through hologram. The drawing itself is unchanged.
 
 #### Natural human motion
 

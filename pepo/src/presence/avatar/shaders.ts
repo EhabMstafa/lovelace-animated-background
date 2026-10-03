@@ -31,38 +31,3 @@ export const traceFragment = /* glsl */ `
     gl_FragColor = vec4(vColor, a);
   }
 `
-
-/**
- * FATHI's solid body: the drawing's own silhouette, filled, following the
- * same rig. Opaque, so the avatar is a person in front of the landscape,
- * never a see-through hologram.
- */
-export const shellVertex = /* glsl */ `
-  ${palette}
-  ${helpers}
-  ${fathiRig}
-  attribute float aCoverage;
-  varying float vCoverage;
-  varying float vY;
-  void main() {
-    vec3 p = rigPosition(position, 0.0);
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(faceToWorld(p), 1.0);
-    vCoverage = aCoverage;
-    vY = position.y;
-  }
-`
-
-export const shellFragment = /* glsl */ `
-  uniform float uOpacity;
-  varying float vCoverage;
-  varying float vY;
-  void main() {
-    float inside = smoothstep(0.42, 0.58, vCoverage);
-    float a = inside * uOpacity * smoothstep(-1.96, -1.74, vY);
-    if (a < 0.003) discard;
-    // A deep night blue just under the sky around it, so the body reads as a
-    // solid form in front of the landscape rather than a cut-out.
-    vec3 c = mix(vec3(0.018, 0.034, 0.078), vec3(0.026, 0.05, 0.11), smoothstep(-1.6, 0.6, vY));
-    gl_FragColor = vec4(c, a);
-  }
-`

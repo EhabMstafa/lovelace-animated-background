@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { presence, type PresenceForm, type PresenceState } from '../core/presence'
 import { getPointer, pointerActive } from '../hooks/usePointer'
 import { createHumanMotion, presenceLight, type AvatarState } from './avatar/humanMotion'
-import { shellFragment, shellVertex, traceFragment, traceVertex } from './avatar/shaders'
+import { traceFragment, traceVertex } from './avatar/shaders'
 import { useHeadCloud } from './avatar/useHeadCloud'
 import { bodyFragment, bodyVertex } from './body/particleShaders'
 import { createRibbonGeometry, ribbonVertex } from './lines'
@@ -129,16 +129,6 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     return g
   }, [cloud])
 
-  const shellGeo = useMemo(() => {
-    if (!cloud) return null
-    const g = new THREE.BufferGeometry()
-    g.setAttribute('position', new THREE.BufferAttribute(cloud.shellPosition, 3))
-    g.setAttribute('aCoverage', new THREE.BufferAttribute(cloud.shellCoverage, 1))
-    g.setIndex(new THREE.BufferAttribute(cloud.shellIndex, 1))
-    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 3)
-    return g
-  }, [cloud])
-
   useEffect(() => {
     if (cloud) assignFaceTargets(particleGeo, cloud)
   }, [cloud, particleGeo])
@@ -211,18 +201,6 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       }),
     [bodyUniforms],
   )
-  const shellMat = useMemo(
-    () =>
-      new THREE.ShaderMaterial({
-        vertexShader: shellVertex,
-        fragmentShader: shellFragment,
-        transparent: true,
-        depthWrite: false,
-        uniforms: { uOpacity: { value: 0 }, ...pose },
-      }),
-    [pose],
-  )
-
   const fade = useMemo(() => ({ value: 1 }), [])
 
   const makeStreamMat = (alpha: number, width: number) =>
@@ -330,12 +308,11 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
   useEffect(
     () => () => {
       ;[particleGeo, streamGeo, innerStreamGeo, starGeo, nodeGeo, ...orbitGeos].forEach((g) => g.dispose())
-      ;[bodyMat, faceMat, shellMat, streamMat, innerStreamMat, starMat, skinMat, glowMat, traceMat, ...orbitMats, ...nodeMats].forEach((m) => m.dispose())
+      ;[bodyMat, faceMat, streamMat, innerStreamMat, starMat, skinMat, glowMat, traceMat, ...orbitMats, ...nodeMats].forEach((m) => m.dispose())
     },
-    [particleGeo, streamGeo, innerStreamGeo, starGeo, nodeGeo, orbitGeos, bodyMat, faceMat, shellMat, streamMat, innerStreamMat, starMat, skinMat, glowMat, traceMat, orbitMats, nodeMats],
+    [particleGeo, streamGeo, innerStreamGeo, starGeo, nodeGeo, orbitGeos, bodyMat, faceMat, streamMat, innerStreamMat, starMat, skinMat, glowMat, traceMat, orbitMats, nodeMats],
   )
   useEffect(() => () => traceGeo?.dispose(), [traceGeo])
-  useEffect(() => () => shellGeo?.dispose(), [shellGeo])
 
   const qFree = useMemo(() => new THREE.Quaternion(), [])
   const qAligned = useMemo(() => new THREE.Quaternion(), [])
@@ -373,7 +350,6 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     for (const obj of orbOnly.current) if (obj) obj.visible = orbVisible > 0.001
     bodyMat.uniforms.uOpacity.value = orbVisible
     faceMat.uniforms.uOpacity.value = faceVisible
-    shellMat.uniforms.uOpacity.value = faceVisible
     traceMat.uniforms.uOpacity.value = faceVisible
     for (const obj of faceOnly.current) if (obj) obj.visible = faceVisible > 0.001
 
@@ -496,7 +472,6 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       </group>
 
       <points geometry={particleGeo} material={bodyMat} renderOrder={3} frustumCulled={false} />
-      {shellGeo && <mesh ref={face(0)} geometry={shellGeo} material={shellMat} renderOrder={6} frustumCulled={false} visible={false} />}
       <points ref={face(1)} geometry={particleGeo} material={faceMat} renderOrder={7} frustumCulled={false} visible={false} />
       {traceGeo && <lineSegments ref={face(2)} geometry={traceGeo} material={traceMat} renderOrder={8} frustumCulled={false} visible={false} />}
 
