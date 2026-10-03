@@ -29,51 +29,108 @@ export const PARTICLE_KIND = { shell: 0, inner: 1, halo: 2 } as const
 
 /**
  * One geometry, three populations distinguished by `aKind`:
- *  - shell:  the field's boundary, where most of the light lives
- *  - inner:  the volume, and a diffuse core (about 40% of them, gathered
- *            near the centre) that suggests something lives inside
- *  - halo:   a few motes just outside, which drift inward while listening
+ *  - shell:  the field's boundary, gathered in uneven patches (not an even skin)
+ *  - inner:  the volume: a diffuse core near the centre, particles that follow
+ *            the field filaments (aLine = which filament), and a few loose
+ *            clusters with empty space between them
+ *  - halo:   a few motes just outside, only seen while listening
  * Brightness tiers (faint / medium / bright) come from aSeed.w in the shader.
  */
-export function createOrbParticles(counts: ParticleCounts, seed = 7) {
+export function createOrbParticles(counts: ParticleCounts, streams: THREE.Vector3[][] = [], seed = 7) {
   const rand = mulberry32(seed)
   const total = counts.shell + counts.inner + counts.halo
   const position = new Float32Array(total * 3)
   const seeds = new Float32Array(total * 4)
   const kind = new Float32Array(total)
   const axis = new Float32Array(total * 3)
+  const line = new Float32Array(total).fill(-1)
   const dir = new THREE.Vector3()
   const ax = new THREE.Vector3()
 
   let i = 0
-  const push = (k: number, r: number) => {
-    randomDir(rand, dir).multiplyScalar(r)
-    position.set([dir.x, dir.y, dir.z], i * 3)
+  const put = (k: number, p: THREE.Vector3, l = -1) => {
+    position.set([p.x, p.y, p.z], i * 3)
     seeds.set([rand(), rand(), rand(), rand()], i * 4)
     kind[i] = k
+    line[i] = l
     randomDir(rand, ax)
     axis.set([ax.x, ax.y, ax.z], i * 3)
     i++
   }
+  const gauss = () => (rand() + rand() + rand() - 1.5) / 1.5
 
-  for (let n = 0; n < counts.shell; n++) {
-    // Gaussian-ish thickness keeps the skin crisp but not perfectly thin.
-    const g = (rand() + rand() + rand() - 1.5) / 1.5
-    push(PARTICLE_KIND.shell, 1 + g * 0.018)
+  // Boundary: denser in a few patches, sparse between them.
+  const patches = Array.from({ length: 7 }, () => randomDir(rand, new THREE.Vector3()))
+  for (let n = 0; n < counts.shell; ) {
+    randomDir(rand, dir)
+    const near = Math.max(...patches.map((c) => Math.exp(-(dir.angleTo(c) ** 2) / 0.35)))
+    if (rand() > 0.3 + 0.7 * near) continue
+    put(PARTICLE_KIND.shell, dir.multiplyScalar(1 + gauss() * 0.018))
+    n++
   }
+
+  // Volume: a core (~30%), the filaments (~40%, if any), loose clusters (the rest).
+  const clusters = Array.from({ length: 6 }, () => randomDir(rand, new THREE.Vector3()).multiplyScalar(0.35 + rand() * 0.45))
+  const nCore = Math.round(counts.inner * 0.3)
+  const nLine = streams.length ? Math.round(counts.inner * 0.4) : 0
   for (let n = 0; n < counts.inner; n++) {
-    const core = rand() < 0.4
-    push(PARTICLE_KIND.inner, core ? 0.04 + 0.32 * Math.pow(rand(), 1.6) : 0.3 + 0.62 * Math.pow(rand(), 0.8))
+    if (n < nCore) {
+      // Irregular: two overlapping lobes rather than one ball.
+      const lobe = rand() < 0.6 ? new THREE.Vector3(-0.04, -0.02, 0.03) : new THREE.Vector3(0.06, 0.05, -0.04)
+      put(PARTICLE_KIND.inner, randomDir(rand, dir).multiplyScalar(0.03 + 0.17 * Math.pow(rand(), 1.4)).add(lobe))
+    } else if (n < nCore + nLine) {
+      const l = (n - nCore) % streams.length
+      const pts = streams[l]
+      const p = pts[Math.floor(rand() * pts.length)].clone()
+      put(PARTICLE_KIND.inner, p.add(randomDir(rand, dir).multiplyScalar(0.035 * rand())), l)
+    } else {
+      const c = clusters[Math.floor(rand() * clusters.length)]
+      put(PARTICLE_KIND.inner, randomDir(rand, dir).multiplyScalar(0.05 + 0.13 * rand()).add(c))
+    }
   }
-  for (let n = 0; n < counts.halo; n++) push(PARTICLE_KIND.halo, 1.06 + Math.pow(rand(), 1.5) * 0.42)
+  for (let n = 0; n < counts.halo; n++) put(PARTICLE_KIND.halo, randomDir(rand, dir).multiplyScalar(1.06 + Math.pow(rand(), 1.5) * 0.42))
 
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.BufferAttribute(position, 3))
   geo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 4))
   geo.setAttribute('aKind', new THREE.BufferAttribute(kind, 1))
   geo.setAttribute('aAxis', new THREE.BufferAttribute(axis, 3))
+  geo.setAttribute('aLine', new THREE.BufferAttribute(line, 1))
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 3)
   return geo
+}
+
+/**
+ * The core's quiet network: a few dim points close to the centre and the
+ * short curved links between them (links come and go in the shader).
+ */
+export function createCoreNetwork(seed = 13) {
+  const rand = mulberry32(seed)
+  const nodes = [
+    new THREE.Vector3(-0.1, 0.04, 0.06),
+    new THREE.Vector3(0.05, 0.12, -0.05),
+    new THREE.Vector3(0.13, -0.03, 0.04),
+    new THREE.Vector3(-0.02, -0.12, -0.03),
+    new THREE.Vector3(-0.15, -0.08, -0.08),
+  ]
+  const pairs = [[0, 1], [1, 2], [2, 3], [3, 0], [0, 4], [4, 3]]
+  const links = pairs.map(([a, b]) => {
+    const A = nodes[a], B = nodes[b]
+    const mid = A.clone().add(B).multiplyScalar(0.5).add(randomDir(rand, new THREE.Vector3()).multiplyScalar(0.05))
+    const curve = new THREE.QuadraticBezierCurve3(A, mid, B)
+    return curve.getPoints(24)
+  })
+  const pos = new Float32Array(nodes.length * 3)
+  const s = new Float32Array(nodes.length)
+  nodes.forEach((n, k) => {
+    pos.set([n.x, n.y, n.z], k * 3)
+    s[k] = rand()
+  })
+  const points = new THREE.BufferGeometry()
+  points.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+  points.setAttribute('aSeed', new THREE.BufferAttribute(s, 1))
+  points.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1)
+  return { points, links }
 }
 
 export interface FlowArc {

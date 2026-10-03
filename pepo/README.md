@@ -216,18 +216,28 @@ top:
 - **Boundary:** the edge is lit where the field gathers, unevenly: bright
   stretches, quiet ones, places where it almost dissolves (about two thirds
   stays clearly readable). The brighter side wanders slowly around the lower
-  left, where light enters; the opposite side always stays quieter, so the
-  edge never closes into a neon ring. The glow is local to the lit stretches;
+  left, where light enters, with a second, more restrained blue region upper
+  left; the opposite side always stays quieter, so the edge never closes into
+  a neon ring. The glow is local to the lit stretches;
   there is no halo around it all and no glass reflections.
-- **Depth:** a front shell of faint particles, a mid volume with a drifting
-  nebula and a few curved field filaments that dive through it (each on its
-  own slow life: emerge, fade, come back), and a diffuse deep core, slightly
-  off centre. Far-side particles are smaller, dimmer and softer; filaments
-  behind the centre draw wider and fainter. Particles come in tiers: most
-  barely there, some defining the volume, a few active.
+- **Inside:** mostly dark and quiet. A diffuse, irregular core (about a
+  fifth of the diameter) gathers slightly off centre, wanders slowly and
+  changes shape and density; a few dim points in it are joined by links
+  that come and go (more of them while thinking). Five unequal flows (three
+  long at different depths, one dipping near the core, one short fragment)
+  are never drawn whole: stretches vanish and return, and a tiny node
+  travels along them. Part of the particles follow the flows; the rest sit
+  in loose clusters with empty space between, and the boundary's particles
+  gather in patches.
+- **Depth:** back particles tiny, dim and soft; the front layer sparse and
+  crisp; flows behind the centre draw wider and fainter. Haze appears in
+  patches, never as a wallpaper.
+- **Motion:** the sphere never turns as one body. Each inner layer moves on
+  its own, at its own slow pace (flows take 8–20 s to visibly move).
 - **Orbits:** one thin primary orbit, blue into a violet accent, only partly
-  visible and hidden where it passes behind the Orb, plus a barely-there
-  second trajectory. No gyroscope rings, no star glints.
+  visible, softer and wider behind, and hidden by the Orb's projected
+  silhouette where it passes behind it, plus a barely-there second
+  trajectory. No gyroscope rings, no star glints.
 - **Colour:** mostly blue, cyan where light enters, violet as an accent,
   white only in tiny highlights. On the light theme the volume is a deep
   blue that lets a little of the sky through.
@@ -241,10 +251,10 @@ any state morphs into any other in roughly a second with no bespoke
 transitions.
 
 - **idle**: very slow; the inside drifts, the edge energy migrates, the core changes density; one breath every 4–7 s
-- **listening**: leans in slightly *before* audio starts; inside grows calmer and more coherent; a few tiny cyan impulses travel inward and outer motes drift in to the edge (no waveform)
+- **listening**: never grows; the flows read more continuous, the core a little more attentive, a few tiny cyan impulses travel inward and outer motes drift in to the edge (no waveform)
 - **understanding**: particles gather inward, orbits align, surface filaments light up and connect
-- **thinking**: the inside grows more active (filaments and particles move more), deeper filaments appear, violet shows in the deeper layers; brightness stays the same
-- **speaking**: slow internal rises with each phrase (core, filaments, active points), settling in pauses; audio only touches the detail
+- **thinking**: more inner complexity, not more light: the core tightens and its links form, flows and their particles move a little faster, deeper flows appear, violet shows in the deeper layers
+- **speaking**: when a phrase begins, one soft wave of energy travels from inside to the edge; the core rises with the phrase and settles in pauses; audio only touches the detail
 - **working**: organised and active (in Scene 3 it will also stream particles toward tool windows)
 - **waiting**: calmer and dimmer than idle
 - **attentive**: the user is about to speak or type (the keyboard opened): a little nearer and brighter

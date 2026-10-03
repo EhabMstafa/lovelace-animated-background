@@ -6,6 +6,7 @@ import { getPointer } from '../hooks/usePointer'
 import { bodyFragment, bodyVertex } from './body/particleShaders'
 import { createRibbonGeometry, ribbonVertex } from './lines'
 import {
+  createCoreNetwork,
   createFlowArcs,
   createOrbParticles,
   createStarNodes,
@@ -14,7 +15,7 @@ import {
   type FlowArc,
   type ParticleCounts,
 } from './orb/geometry'
-import { glowFragment, glowVertex, orbitFragment, skinFragment, skinVertex, starFragment, starVertex, streamFragment } from './orb/shaders'
+import { glowFragment, glowVertex, linkFragment, orbitFragment, skinFragment, skinVertex, starFragment, starVertex, streamFragment } from './orb/shaders'
 import { createOrbMotion } from './orb/orbMotion'
 import { MORPH_TAU, ORB_STATES, PARAM_KEYS, type OrbParams } from './orb/stateParams'
 import { pepoEvents } from '../core/events'
@@ -39,17 +40,22 @@ interface OrbitSpec {
 
 const ORBITS: OrbitSpec[] = [
   // One primary orbit: thin, blue into a violet accent, partly visible, gone behind the Orb.
-  { r: [1.74, 1.74], free: [1.3, 0.05, -0.3], aligned: [1.38, 0, -0.12], speed: 0.014, drift: 0.005, tint: '#6F93FF', tint2: '#9C7BFF', alpha: 0.3, width: 1.5, node: true },
+  { r: [1.74, 1.74], free: [1.3, 0.05, -0.3], aligned: [1.38, 0, -0.12], speed: 0.014, drift: 0.005, tint: '#6F93FF', tint2: '#9C7BFF', alpha: 0.24, width: 1.4, node: true },
   // And a barely-there second trajectory crossing the other way.
   { r: [1.36, 1.36], free: [1.12, -0.35, 0.62], aligned: [1.38, 0, 0.1], speed: 0.022, drift: -0.008, tint: '#4BC8FF', tint2: '#3B82FF', alpha: 0.08, width: 1, node: false },
 ]
 
-/** A few strong field filaments; deeper, smaller ones appear while thinking. */
+/**
+ * Five internal flows, unequal on purpose: three long ones at different
+ * depths, one that dips close to the core, and one short fragment.
+ * Deeper, smaller ones appear while thinking.
+ */
 const FILAMENTS: FlowArc[] = [
   { frame: [0.5, 0.2, 0.35], lon: 0.4, sweep: 2.9, lat: 0.25, wave: 0.22, rEnd: 0.96, rMid: 0.6 },
   { frame: [-0.6, 1.1, -0.2], lon: 2.2, sweep: 2.5, lat: -0.15, wave: 0.28, rEnd: 0.94, rMid: 0.52 },
   { frame: [1.2, -0.4, 0.9], lon: 4.0, sweep: 3.2, lat: 0.1, wave: 0.18, rEnd: 0.97, rMid: 0.7 },
-  { frame: [0.15, 2.3, -0.75], lon: 5.3, sweep: 2.2, lat: -0.35, wave: 0.25, rEnd: 0.9, rMid: 0.45 },
+  { frame: [0.15, 2.3, -0.75], lon: 5.3, sweep: 2.2, lat: -0.35, wave: 0.25, rEnd: 0.9, rMid: 0.3 },
+  { frame: [-1.0, -0.7, 0.4], lon: 1.3, sweep: 1.1, lat: 0.3, wave: 0.15, rEnd: 0.82, rMid: 0.58 },
 ]
 const DEEP_FILAMENTS: FlowArc[] = [
   { frame: [0.9, 0.6, -0.4], lon: 1.0, sweep: 3.6, lat: 0.2, wave: 0.35, rEnd: 0.55, rMid: 0.3 },
@@ -88,6 +94,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
   const root = useRef<THREE.Group>(null)
   const spinGroup = useRef<THREE.Group>(null)
   const glowMesh = useRef<THREE.Mesh>(null)
+  const coreGroup = useRef<THREE.Group>(null)
   const orbitRefs = useRef<(THREE.Group | null)[]>([])
   const orbitNodeRefs = useRef<(THREE.Object3D | null)[]>([])
   /** Layers that exist only in the Orb; hidden (not drawn) in the Avatar. */
@@ -104,8 +111,12 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
   useEffect(() => pepoEvents.on('cue', ({ kind }) => orbMotion.cue(kind)), [orbMotion])
 
   // ── Geometry ──
-  const particleGeo = useMemo(() => createOrbParticles(counts), [counts])
-  const streamGeo = useMemo(() => createRibbonGeometry(createFlowArcs(FILAMENTS)), [])
+  const flowPaths = useMemo(() => createFlowArcs(FILAMENTS), [])
+  // Part of the volume's particles follow the flows (aLine), so the inside reads as organised.
+  const particleGeo = useMemo(() => createOrbParticles(counts, flowPaths), [counts, flowPaths])
+  const streamGeo = useMemo(() => createRibbonGeometry(flowPaths), [flowPaths])
+  const core = useMemo(() => createCoreNetwork(), [])
+  const linkGeo = useMemo(() => createRibbonGeometry(core.links), [core])
   const innerStreamGeo = useMemo(() => createRibbonGeometry(createFlowArcs(DEEP_FILAMENTS, 100)), [])
   const orbitGeos = useMemo(() => ORBITS.map((o) => createRibbonGeometry([ellipsePoints(o.r[0], o.r[1])], true)), [])
   const starGeo = useMemo(() => createStarNodes(5, 5), [])
@@ -141,6 +152,10 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       uSize: { value: 2.2 },
       uPixelRatio: { value: pixelRatio },
       uOrbTilt: { value: new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationFromEuler(TILT)) },
+      uSwirl: { value: 0 },
+      uSwirlAxis: { value: FIELD_AXIS },
+      uCoreOffset: { value: new THREE.Vector3() },
+      uActivity: { value: 0 },
     }),
     [pixelRatio],
   )
@@ -171,10 +186,21 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
         uSwirl: { value: 0 },
         uSwirlAxis: { value: FIELD_AXIS },
         uDof: { value: 0.8 },
+        uCoherence: { value: 0 },
       },
     })
-  const streamMat = useMemo(() => makeStreamMat(0.3, 5), [pixelRatio])
-  const innerStreamMat = useMemo(() => makeStreamMat(0, 3), [pixelRatio])
+  const streamMat = useMemo(() => makeStreamMat(0.3, 7), [pixelRatio])
+  const innerStreamMat = useMemo(() => makeStreamMat(0, 4), [pixelRatio])
+  const linkMat = useMemo(
+    () =>
+      additive({
+        vertexShader: ribbonVertex,
+        fragmentShader: linkFragment,
+        side: THREE.DoubleSide,
+        uniforms: { uResolution: { value: resolution }, uWidth: { value: 2.4 * pixelRatio }, uTime: { value: 0 }, uAlpha: { value: 0.2 }, uFade: fade },
+      }),
+    [pixelRatio, resolution, fade],
+  )
 
   const orbitMats = useMemo(
     () =>
@@ -192,6 +218,8 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
             uFade: fade,
             uTint: { value: new THREE.Color(o.tint) },
             uTint2: { value: new THREE.Color(o.tint2) },
+            uOrbR: { value: 1 },
+            uDof: { value: 0.6 },
           },
         }),
       ),
@@ -211,6 +239,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       },
     })
   const starMat = useMemo(() => makeStarMat(16, '#4BC8FF'), [pixelRatio])
+  const coreNodeMat = useMemo(() => makeStarMat(11, '#6F8CFF'), [pixelRatio])
   const nodeMats = useMemo(() => ORBITS.map((o) => makeStarMat(12, o.tint)), [pixelRatio])
 
   const skinMat = useMemo(
@@ -228,6 +257,9 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
           uListen: { value: 0 },
           uEmphasis: { value: 0 },
           uLight: { value: 0 },
+          uCore: { value: new THREE.Vector2() },
+          uWave: { value: 0 },
+          uActivity: { value: 0 },
           uFade: fade,
         },
       }),
@@ -264,10 +296,10 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
 
   useEffect(
     () => () => {
-      ;[particleGeo, streamGeo, innerStreamGeo, starGeo, nodeGeo, ...orbitGeos].forEach((g) => g.dispose())
-      ;[bodyMat, streamMat, innerStreamMat, starMat, skinMat, glowMat, ...orbitMats, ...nodeMats].forEach((m) => m.dispose())
+      ;[particleGeo, streamGeo, innerStreamGeo, starGeo, nodeGeo, linkGeo, core.points, ...orbitGeos].forEach((g) => g.dispose())
+      ;[bodyMat, streamMat, innerStreamMat, starMat, coreNodeMat, linkMat, skinMat, glowMat, ...orbitMats, ...nodeMats].forEach((m) => m.dispose())
     },
-    [particleGeo, streamGeo, innerStreamGeo, starGeo, nodeGeo, orbitGeos, bodyMat, streamMat, innerStreamMat, starMat, skinMat, glowMat, orbitMats, nodeMats],
+    [particleGeo, streamGeo, innerStreamGeo, starGeo, nodeGeo, linkGeo, core, orbitGeos, bodyMat, streamMat, innerStreamMat, starMat, coreNodeMat, linkMat, skinMat, glowMat, orbitMats, nodeMats],
   )
 
   const qFree = useMemo(() => new THREE.Quaternion(), [])
@@ -330,9 +362,17 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     // Emphasis is a local highlight (skin), not a brighter Orb.
     u.uGlow.value = p.glow
 
-    if (spinGroup.current) {
-      spinGroup.current.rotation.y = c.rot
-      spinGroup.current.scale.setScalar(p.scale * (1 + m * 0.06))
+    // The sphere itself never turns as one body; only its inner layers move.
+    if (spinGroup.current) spinGroup.current.scale.setScalar(p.scale * (1 + m * 0.06))
+    // The core gathers slightly off centre and wanders slowly (two unrelated periods).
+    const coreX = -0.05 + 0.05 * Math.sin(c.t * 0.029 + 0.7) + 0.02 * Math.sin(c.t * 0.071)
+    const coreY = -0.03 + 0.04 * Math.sin(c.t * 0.023 + 2.1) + 0.015 * Math.sin(c.t * 0.057 + 1.0)
+    u.uCoreOffset.value.set(coreX, coreY, 0)
+    u.uActivity.value = p.activity
+    if (coreGroup.current) {
+      coreGroup.current.position.set(coreX, coreY, 0)
+      coreGroup.current.rotation.set(c.t * 0.011 + 0.4, c.t * 0.017, c.t * 0.007)
+      coreGroup.current.scale.setScalar(p.scale * (1 - 0.18 * p.activity))
     }
     // The glow follows the Orb's size, so it stays just outside the edge.
     glowMesh.current?.scale.setScalar(p.scale * (1 + m * 0.06))
@@ -340,9 +380,11 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     // Filaments drift on their own (each at its own pace about the field
     // axis); thinking makes them a little more active, speech lifts them.
     c.swirl = (c.swirl ?? 0) + dt * timeScale * AMBIENT * (0.05 + p.activity * 0.07)
+    u.uSwirl.value = c.swirl
     streamMat.uniforms.uTime.value = c.t
     streamMat.uniforms.uSwirl.value = c.swirl
-    streamMat.uniforms.uAlpha.value = 0.5 * (1 + p.organize * 0.25) * p.glow
+    streamMat.uniforms.uCoherence.value = p.listen
+    streamMat.uniforms.uAlpha.value = 0.68 * (1 + p.organize * 0.25) * p.glow
     streamMat.uniforms.uPulse.value = 0.22 + p.organize * 0.2 + p.activity * 0.25 + p.speak * c.energy * 0.35 + p.listen * c.energy * 0.15
     streamMat.uniforms.uViolet.value = p.violet
     innerStreamMat.uniforms.uTime.value = c.t * 1.2
@@ -350,6 +392,11 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     innerStreamMat.uniforms.uAlpha.value = Math.max(0, p.depth - 0.3) * 0.4
     innerStreamMat.uniforms.uPulse.value = Math.max(0, p.depth - 0.3) * 0.5
     innerStreamMat.uniforms.uViolet.value = 0.4 + p.violet * 0.6
+    linkMat.uniforms.uTime.value = c.t
+    // Links are barely there at rest; while thinking they form and connect.
+    linkMat.uniforms.uAlpha.value = (0.07 + 0.32 * p.activity + 0.08 * p.organize) * p.glow
+    coreNodeMat.uniforms.uTime.value = c.t
+    coreNodeMat.uniforms.uAlpha.value = (0.32 + 0.25 * p.activity + 0.2 * p.speak * c.energy) * p.glow * orbVisible
     starMat.uniforms.uTime.value = c.t
     starMat.uniforms.uAlpha.value = (0.45 + p.organize * 0.15 + p.speak * c.energy * 0.3) * p.glow * orbVisible
 
@@ -362,6 +409,9 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     skinMat.uniforms.uListen.value = p.listen
     skinMat.uniforms.uEmphasis.value = sig.emphasis * 10
     skinMat.uniforms.uLight.value = damp(skinMat.uniforms.uLight.value, light ? 1 : 0, 0.12, dt)
+    skinMat.uniforms.uCore.value.set(coreX, coreY)
+    skinMat.uniforms.uWave.value = sig.wave
+    skinMat.uniforms.uActivity.value = p.activity
     glowMat.uniforms.uTime.value = c.t
     glowMat.uniforms.uGlow.value = p.glow
     glowMat.uniforms.uViolet.value = p.violet
@@ -373,6 +423,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       mat.uniforms.uHead.value = (mat.uniforms.uHead.value + dt * timeScale * AMBIENT * o.speed * (1 + p.activity * 0.8)) % 1
       mat.uniforms.uAlpha.value = o.alpha * (1 + p.organize * 0.4 + p.listen * c.energy * 0.3 + p.speak * c.energy * 0.2) * p.glow
       mat.uniforms.uViolet.value = p.violet
+      mat.uniforms.uOrbR.value = p.scale * (1 + m * 0.06)
       const nodeMat = nodeMats[i]
       nodeMat.uniforms.uTime.value = c.t
       nodeMat.uniforms.uAlpha.value = (0.4 + p.organize * 0.15) * p.glow * orbVisible
@@ -419,6 +470,12 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       </group>
 
       <points geometry={particleGeo} material={bodyMat} renderOrder={3} frustumCulled={false} />
+
+      {/* The core's quiet network: a few dim points and the links between them. */}
+      <group ref={(el) => { coreGroup.current = el; orbOnly.current[ORBITS.length + 2] = el }}>
+        <mesh geometry={linkGeo} material={linkMat} renderOrder={2} frustumCulled={false} />
+        <points geometry={core.points} material={coreNodeMat} renderOrder={5} />
+      </group>
 
 
       {ORBITS.map((o, i) => (

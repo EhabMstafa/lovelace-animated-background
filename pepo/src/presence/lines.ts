@@ -102,7 +102,9 @@ export const ribbonVertex = /* glsl */ `
     c.xy += normal * aSide * width / uResolution.y * c.w;
     gl_Position = c;
 
-    vView = mv.xy - centre.xy;
+    // Offset from the centre as seen on screen (scaled to the centre's depth),
+    // so occlusion by the Orb follows its real silhouette.
+    vView = mv.xy * (centre.z / mv.z) - centre.xy;
     vT = aT;
     vId = aId;
     vSide = aSide;

@@ -52,8 +52,11 @@ export const noise = /* glsl */ `
     // left; the opposite side always stays quieter, so the edge never closes
     // into an even ring. Noise breaks it into uneven stretches.
     float a = -2.24 + 0.9 * sin(t * 0.031) + 0.4 * sin(t * 0.017 + 1.3);
-    float side = 0.5 + 0.5 * dot(sn, vec2(cos(a), sin(a)));
-    float n = 0.55 * fbm3(vec3(sn * 1.35 + 3.1, t * 0.035)) + 0.45 * side;
-    return mix(0.18, 1.0, smoothstep(0.3, 0.62, n));
+    float side = pow(0.5 + 0.5 * dot(sn, vec2(cos(a), sin(a))), 1.6);
+    // A second, more restrained region (blue, upper left), drifting on its own.
+    float b = 2.05 + 0.5 * sin(t * 0.023 + 2.0);
+    side = max(side, 0.72 * pow(0.5 + 0.5 * dot(sn, vec2(cos(b), sin(b))), 6.0));
+    float n = 0.5 * fbm3(vec3(sn * 1.35 + 3.1, t * 0.035)) + 0.5 * side;
+    return mix(0.16, 1.0, smoothstep(0.3, 0.64, n));
   }
 `

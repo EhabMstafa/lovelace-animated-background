@@ -44,6 +44,9 @@ export const skinFragment = /* glsl */ `
   uniform float uListen;
   uniform float uEmphasis; // 0..1, a semantic cue
   uniform float uLight;    // 1 on the light theme
+  uniform vec2 uCore;      // where the core gathers (view space, slowly wandering)
+  uniform float uWave;     // 0..1 while one outward wave travels (speech), else 0
+  uniform float uActivity;
   varying vec3 vNormal;
   varying vec3 vPos;
 
@@ -59,22 +62,33 @@ export const skinFragment = /* glsl */ `
     // gathers there, unevenly. Breath moves the edge energy, not the size.
     float energy = edgeEnergy(sn, uTime) * (1.0 + 0.12 * uBreath);
     vec3 rim = rimLight(sn, uViolet);
-    vec3 col = rim * (pow(edge, 2.8) * 0.6 + pow(edge, 10.0) * 0.55) * energy;
+    vec3 col = rim * (pow(edge, 2.8) * 0.5 + pow(edge, 10.0) * 0.48) * energy;
 
-    // Mid volume: deep blue, cyan gathering lower left, violet depth upper right.
-    vec3 body = mix(C_DEEP, C_BLUE, 0.3) * (0.1 + 0.3 * pow(edge, 1.5));
-    body += C_SKY * smoothstep(0.0, 1.0, dot(sn, vec2(-0.62, -0.78))) * pow(rho, 1.3) * 0.2 * energy;
-    body += C_VIOLET * smoothstep(0.2, 1.0, dot(sn, VIOLET_DIR2)) * rho * (0.04 + 0.12 * uViolet);
-    // A slow inner nebula, drifting on its own.
-    float neb = smoothstep(0.36, 0.78, fbm3(vPos * 1.9 + vec3(0.0, uTime * 0.02, uTime * 0.013)));
-    body += mix(C_BLUE, C_VIOLET, clamp(0.12 + uViolet * 0.7, 0.0, 1.0)) * neb * (0.22 + 0.12 * uDepth) * (0.5 + 0.5 * rho);
+    // The volume: dark and quiet by default (no even shell of colour). It
+    // thickens toward the edge only where the field carries energy.
+    vec3 body = mix(C_DEEP, C_BLUE, 0.3) * (0.07 + 0.26 * pow(edge, 1.7) * (0.45 + 0.55 * energy));
+    body += C_SKY * smoothstep(0.0, 1.0, dot(sn, vec2(-0.62, -0.78))) * pow(rho, 1.3) * 0.18 * energy;
+    body += C_VIOLET * smoothstep(0.2, 1.0, dot(sn, VIOLET_DIR2)) * rho * (0.03 + 0.12 * uViolet);
+    // Haze in patches, not a wallpaper: most of the inside stays dark.
+    float neb = smoothstep(0.44, 0.84, fbm3(vPos * 1.7 + vec3(0.0, uTime * 0.017, uTime * 0.011)));
+    body += mix(C_BLUE, C_VIOLET, clamp(0.12 + uViolet * 0.7, 0.0, 1.0)) * neb * (0.24 + 0.12 * uDepth) * (0.45 + 0.55 * rho);
 
-    // Deep core: a diffuse concentration that changes density slowly. Never a dot.
-    // Slightly off-centre, toward the light, so it never reads as a target.
-    float core = gaussF(length(vNormal.xy - vec2(-0.06, -0.04)), 0.46) * (0.45 + 0.55 * fbm3(vPos * 2.6 + vec3(uTime * 0.03, 0.0, -uTime * 0.02)));
-    float coreLevel = 0.2 + 0.05 * uBreath + 0.12 * uSpeak + 0.06 * uDepth;
-    body += mix(C_BLUE, C_SKY, 0.5) * core * coreLevel;
+    // The core: a diffuse, irregular gathering (about a fifth of the diameter)
+    // that wanders slowly and changes shape and density, never a ball.
+    vec2 cq = vNormal.xy - uCore;
+    float warp = fbm3(vec3(cq * 3.0, uTime * 0.04)) - 0.5;
+    float core = gaussF(length(cq * vec2(1.0, 1.25)) + warp * 0.12, 0.27);
+    core *= 0.55 + 0.45 * fbm3(vPos * 3.2 + vec3(uTime * 0.025, 0.0, -uTime * 0.019));
+    float coreLevel = 0.3 + 0.04 * uBreath + 0.12 * uSpeak + 0.05 * uDepth + 0.05 * uListen + 0.04 * uActivity;
+    body += mix(C_BLUE, C_VIOLET, 0.22 + 0.3 * uViolet) * core * coreLevel;
+    body += mix(C_BLUE, C_DEEP, 0.5) * gaussF(length(cq), 0.5) * 0.08;
     col += body;
+
+    // Speaking: meaning starts inside and reaches the edge, once per phrase.
+    if (uWave > 0.0) {
+      float front = gaussF(rho - uWave, 0.07 + 0.05 * uWave) * (0.6 + 0.4 * fbm3(vec3(sn * 2.0, uTime * 0.1)));
+      col += mix(C_BLUE, C_SKY, 0.5) * front * sin(uWave * 3.1416) * 0.1;
+    }
 
     // Listening: a few tiny cyan impulses travel inward from the edge.
     if (uListen > 0.01) {
@@ -84,11 +98,13 @@ export const skinFragment = /* glsl */ `
         float cyc = uTime * 0.3 + fi * 0.37;
         float ph = fract(cyc);
         float ang = 6.2831 * hash3(vec3(floor(cyc), fi, 4.0));
-        float across = gaussF(1.0 - dot(sn, vec2(cos(ang), sin(ang))), 0.0009);
-        // A small point with a short trail behind it (toward the edge).
-        float d = rho - (1.0 - ph * 0.75);
-        float along = d < 0.0 ? gaussF(d, 0.009) : exp(-d / 0.05);
-        impulse += across * along * sin(ph * 3.1416);
+        vec2 dirv = vec2(cos(ang), sin(ang));
+        // A small round point with a short trail behind it (toward the edge).
+        vec2 v = vNormal.xy - dirv * (1.0 - ph * 0.75);
+        float along = dot(v, dirv);
+        float across = length(v - dirv * along);
+        float tail = along < 0.0 ? gaussF(along, 0.01) : exp(-along / 0.045);
+        impulse += gaussF(across, 0.008 + 0.006 * max(along, 0.0)) * tail * sin(ph * 3.1416);
       }
       col += C_CYAN * impulse * 0.5 * uListen;
     }
@@ -169,24 +185,34 @@ export const streamFragment = /* glsl */ `
   varying float vSide;
   varying float vDepth;
   varying vec2 vView;
+  uniform float uCoherence; // listening: paths read more continuous
+  float h1(float n) { return fract(sin(n * 91.3) * 43758.5); }
+  float n1(float x) { float i = floor(x), f = fract(x); return mix(h1(i), h1(i + 1.0), f * f * (3.0 - 2.0 * f)); }
   void main() {
     float ends = smoothstep(0.0, 0.2, vT) * smoothstep(1.0, 0.8, vT);
     // Emerge, fade, reconnect: each path has its own slow life.
     float life = smoothstep(-0.4, 0.75, sin(uTime * 0.05 + vId * 2.4));
-    float speed = 0.03 + fract(vId * 0.618) * 0.035;
+    // Never drawn whole: stretches vanish and return, drifting slowly along.
+    float seen = smoothstep(0.32, 0.62, n1(vT * 5.0 + vId * 7.3 - uTime * 0.045));
+    seen = mix(seen, 1.0, uCoherence * 0.45);
+    float speed = 0.025 + fract(vId * 0.618) * 0.03;
     float head = fract(uTime * speed + vId * 0.37);
-    float pulse = exp(-pow((vT - head) * 7.0, 2.0));
+    // A tiny energy node travelling along, rather than a streak.
+    float pulse = exp(-pow((vT - head) * 22.0, 2.0));
     float behind = smoothstep(0.2, -0.5, vDepth);
 
     vec2 dir = normalize(vView + 1e-4);
     float ur = 0.5 + 0.5 * dot(dir, VIOLET_DIR2);
-    vec3 c = mix(C_BLUE, C_SKY, 0.3 + 0.4 * sin(vT * 3.1416 + vId));
-    c = mix(c, C_CYAN, smoothstep(0.45, 0.05, ur) * 0.6);
+    vec3 c = mix(C_DEEP, C_BLUE, 0.6 + 0.4 * sin(vT * 3.1416 + vId));
+    c = mix(c, C_CYAN, smoothstep(0.45, 0.05, ur) * 0.5 + pulse * 0.4);
     c = mix(c, C_LILAC, smoothstep(0.65, 0.97, ur) * clamp(0.2 + uViolet, 0.0, 1.0));
     c = mix(c, C_WHITE, pulse * 0.25);
 
-    float a = (uAlpha * (0.5 + 0.5 * sin(vT * 3.1416)) + pulse * uPulse) * ends * life * mix(1.15, 0.28, behind);
-    gl_FragColor = vec4(c, a * ribbonProfile(vSide) * uFade);
+    float a = (uAlpha * seen * (0.45 + 0.55 * sin(vT * 3.1416)) + pulse * uPulse) * ends * life * mix(1.15, 0.3, behind);
+    // A thin luminous core inside a broad, very soft falloff.
+    float d = abs(vSide);
+    float profile = smoothstep(0.16, 0.0, d) + pow(1.0 - d, 3.0) * 0.36;
+    gl_FragColor = vec4(c, a * profile * uFade);
   }
 `
 
@@ -199,14 +225,16 @@ export const orbitFragment = /* glsl */ `
   uniform float uFade;
   uniform vec3 uTint;
   uniform vec3 uTint2;
+  uniform float uOrbR;     // the Orb's silhouette radius (view units at its centre)
   varying float vT;
   varying float vSide;
   varying float vDepth;
   varying vec2 vView;
   void main() {
-    float behind = smoothstep(0.3, -0.5, vDepth);
-    // Gone where it passes behind the Orb; a little clearer in front of it.
-    float occluded = behind * smoothstep(1.06, 0.97, length(vView));
+    float behind = smoothstep(0.15, -0.35, vDepth);
+    // Hidden by the Orb's volume where it passes behind it (measured on the
+    // projected silhouette); a little clearer where it passes in front.
+    float occluded = behind * smoothstep(uOrbR * 1.03, uOrbR * 0.94, length(vView));
     float trail = fract(uHead - vT);
     float comet = pow(1.0 - trail, 12.0);
     // Never the whole ring at once: stretches fade in and out as it travels.
@@ -214,8 +242,26 @@ export const orbitFragment = /* glsl */ `
     vec3 c = mix(uTint, uTint2, 0.5 + 0.5 * sin(vT * 6.2831 + 0.8));
     c = mix(c, C_VIOLET, uViolet * 0.25);
     c = mix(c, C_WHITE, comet * 0.35);
-    float a = (uAlpha * seen + comet * uAlpha * 1.4) * mix(1.15, 0.4, behind) * (1.0 - occluded);
+    float a = (uAlpha * seen + comet * uAlpha * 1.4) * mix(1.15, 0.35, behind) * (1.0 - occluded);
     gl_FragColor = vec4(c, a * ribbonProfile(vSide) * uFade);
+  }
+`
+
+/** The core's links: dim, short, coming and going (more of them while thinking). */
+export const linkFragment = /* glsl */ `
+  ${palette}
+  uniform float uTime;
+  uniform float uAlpha;
+  uniform float uFade;
+  varying float vT;
+  varying float vId;
+  varying float vSide;
+  void main() {
+    float on = smoothstep(0.1, 0.9, sin(uTime * (0.06 + fract(vId * 0.37) * 0.05) + vId * 1.9));
+    float d = abs(vSide);
+    float profile = smoothstep(0.3, 0.0, d) + pow(1.0 - d, 2.0) * 0.3;
+    float a = uAlpha * on * (0.35 + 0.65 * sin(vT * 3.1416)) * profile;
+    gl_FragColor = vec4(mix(C_BLUE, C_VIOLET, 0.3), a * uFade);
   }
 `
 

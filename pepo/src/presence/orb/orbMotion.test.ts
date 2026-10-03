@@ -45,4 +45,19 @@ describe('orb motion', () => {
     expect(s!.listen).toBe(0)
     expect(s!.speak).toBe(0)
   })
+
+  it('sends one outward wave when a phrase begins, not one per syllable', () => {
+    const m = createOrbMotion(mulberry32(6))
+    let starts = 0
+    let prev = 0
+    // Two phrases of syllables at ~5 Hz, separated by a pause.
+    for (let i = 0, t = 0; i < 9 * 60; i++, t += dt) {
+      const talking = t < 3 || (t > 5 && t < 8)
+      const level = talking ? 0.5 + 0.4 * Math.sin(t * Math.PI * 2 * 5) : 0
+      const w = m.step(dt, 'speaking', level).wave
+      if (w > 0 && prev === 0) starts++
+      prev = w
+    }
+    expect(starts).toBe(2)
+  })
 })

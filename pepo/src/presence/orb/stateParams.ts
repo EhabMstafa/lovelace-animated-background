@@ -6,7 +6,7 @@ import type { PresenceState } from '../../core/presence'
  * can morph into any other without bespoke transitions.
  */
 export interface OrbParams {
-  /** Overall scale. Listening leans in by growing slightly. */
+  /** Overall scale. Kept at 1: no state enlarges the Orb; attention shows inside it. */
   scale: number
   /** Revolutions-ish per second of the particle shell. */
   spin: number
@@ -46,7 +46,7 @@ const base: OrbParams = {
 
 export const ORB_STATES: Record<PresenceState, OrbParams> = {
   idle: base,
-  listening: { ...base, scale: 1.03, spin: 0.014, breath: 0.004, listen: 1, glow: 1.06, violet: 0.05 },
+  listening: { ...base, scale: 1, spin: 0.014, breath: 0.004, listen: 1, glow: 1.06, violet: 0.05 },
   understanding: { ...base, spin: 0.025, converge: 0.05, organize: 1, depth: 0.5, violet: 0.2, glow: 1.04 },
   // Depth, not excitement: the inside grows more active, violet shows deeper down.
   thinking: { ...base, spin: 0.03, converge: 0.03, organize: 0.45, depth: 1, violet: 0.5, activity: 1, glow: 1.0 },
@@ -54,9 +54,9 @@ export const ORB_STATES: Record<PresenceState, OrbParams> = {
   working: { ...base, spin: 0.025, converge: 0.04, organize: 0.8, depth: 0.6, violet: 0.28, activity: 0.55, glow: 1.03 },
   waiting: { ...base, spin: 0.012, breath: 0.006, glow: 0.88 },
   // The user is about to speak or type: a little nearer and brighter, still calm.
-  attentive: { ...base, scale: 1.015, spin: 0.015, breath: 0.005, glow: 1.04, violet: 0.07 },
+  attentive: { ...base, scale: 1, spin: 0.015, breath: 0.005, glow: 1.04, violet: 0.07 },
   // Speech stopped mid-phrase: the light gathers in quickly and quiets.
-  interrupted: { ...base, scale: 1.02, spin: 0.015, converge: 0.05, breath: 0.003, listen: 0.4, glow: 1.0, violet: 0.05 },
+  interrupted: { ...base, scale: 1, spin: 0.015, converge: 0.05, breath: 0.003, listen: 0.4, glow: 1.0, violet: 0.05 },
   // Done: ordered and bright for a moment, then back to rest.
   success: { ...base, spin: 0.022, organize: 0.7, depth: 0.35, glow: 1.1, violet: 0.06 },
   // Something failed: dimmer and slower, never an alarm.
