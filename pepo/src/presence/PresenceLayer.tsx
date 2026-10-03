@@ -19,13 +19,9 @@ export function PresenceLayer({ compact = false }: { compact?: boolean }) {
   const { state, form } = usePresence()
   const reducedMotion = useReducedMotion()
 
-  const counts = useMemo(
-    () =>
-      compact
-        ? { shell: 1100, inner: 380, halo: 150 }
-        : { shell: 1700, inner: 620, halo: 240 },
-    [compact],
-  )
+  // The same Orb everywhere (prompt §70): phones draw every particle too;
+  // the quality governor lowers resolution instead if frames run long.
+  const counts = useMemo(() => ({ shell: 1700, inner: 620, halo: 240 }), [])
 
   // FATHI is loaded in the background shortly after start, so switching is
   // instant. Choosing the Avatar hides the Orb at once (it never flashes up

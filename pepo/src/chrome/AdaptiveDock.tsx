@@ -1,6 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CodeXml, FileText, Folder, Globe, Image, LayoutGrid, ListChecks, Map as MapIcon, MessagesSquare, NotebookPen, SquareTerminal, type LucideIcon } from 'lucide-react'
+import {
+  BookOpen,
+  CalendarDays,
+  Clapperboard,
+  CodeXml,
+  Eye,
+  FileText,
+  Folder,
+  Globe,
+  Image,
+  LayoutGrid,
+  ListChecks,
+  Map as MapIcon,
+  MessagesSquare,
+  Music,
+  NotebookPen,
+  Search,
+  SquareTerminal,
+  type LucideIcon,
+} from 'lucide-react'
 import { pepoEvents } from '../core/events'
 import { useWorkspace, workspace } from '../core/workspace'
 import { ease } from '../core/tokens'
@@ -19,8 +38,14 @@ export const TOOLS: Record<string, DockTool> = {
   map: { id: 'map', label: 'Maps', icon: MapIcon },
   code: { id: 'code', label: 'Code', icon: CodeXml },
   images: { id: 'images', label: 'Images', icon: Image },
+  video: { id: 'video', label: 'Video', icon: Clapperboard },
   documents: { id: 'documents', label: 'Documents', icon: FileText },
   tasks: { id: 'tasks', label: 'Tasks', icon: ListChecks },
+  calendar: { id: 'calendar', label: 'Calendar', icon: CalendarDays },
+  research: { id: 'research', label: 'Research', icon: BookOpen },
+  search: { id: 'search', label: 'Search', icon: Search },
+  preview: { id: 'preview', label: 'Preview', icon: Eye },
+  media: { id: 'media', label: 'Media', icon: Music },
   conversation: { id: 'conversation', label: 'Conversation', icon: MessagesSquare },
 }
 
@@ -88,6 +113,15 @@ export function AdaptiveDock({ pinned: pinnedTools = ['browser', 'files', 'termi
   const recentIds = recent.filter((r) => Date.now() - r.at < RECENT_MS && !openKinds.has(r.id)).map((r) => r.id).slice(0, RECENT_MAX)
   // Pinned tools, then whatever is open (or put away), then what was used recently.
   const relevant = compact ? [] : [...new Set([...suggested, ...windows.map((w) => w.kind as string), ...recentIds])].filter((id) => !pinned.includes(id) && TOOLS[id])
+
+  // "Tools" in the navigation opens the shelf.
+  useEffect(
+    () =>
+      pepoEvents.on('workspaceAction', ({ action }) => {
+        if (action === 'showToolShelf') setShelf(true)
+      }),
+    [],
+  )
 
   useEffect(() => {
     if (!shelf) return

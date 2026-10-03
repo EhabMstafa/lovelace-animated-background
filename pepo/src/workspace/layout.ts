@@ -13,7 +13,7 @@ export interface SpatialLayout {
 }
 
 /** Larger, richer tools take the prime position. */
-const PRIORITY = ['map', 'browser', 'documents', 'code', 'images', 'files', 'tasks', 'notes', 'conversation', 'terminal']
+const PRIORITY = ['map', 'browser', 'video', 'documents', 'research', 'code', 'images', 'calendar', 'preview', 'files', 'search', 'tasks', 'notes', 'media', 'memory', 'settings', 'conversation', 'terminal']
 
 const GAP = 14
 const HEADER = 64
@@ -41,7 +41,12 @@ const BODY_W = 0.82
  * surfaces as fit comfortably are shown (at most three, two on tablets): the
  * one in front, then the richest.
  */
-export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stage = stageSize(W, H)): SpatialLayout {
+export interface LayoutOptions {
+  /** Which side PEPO takes on wide screens; by default it follows the user's arrangement. */
+  side?: 'left' | 'right'
+}
+
+export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stage = stageSize(W, H), opts: LayoutOptions = {}): SpatialLayout {
   const rects: Record<string, Rect> = {}
   // Put-away surfaces take no space. Surfaces the user moved or resized keep
   // their own rect (kept on screen) but still hold their slot in PEPO's
@@ -82,14 +87,22 @@ export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stag
   let mode: SpatialLayout['mode']
 
   if (W >= 760 && W >= H * 1.15) {
-    // Side by side: PEPO keeps a column on the left, the work fills the right.
+    // Side by side: PEPO keeps a column at one side, the work fills the
+    // other. Left by default; right when the user has moved their work to the
+    // left (or the runtime asks for it). With a full workspace PEPO rises to
+    // the upper corner, so its words sit clear of the work below it.
     const col = Math.min(600, Math.max(260, W * 0.36))
     const s = Math.min(0.8, col / (stage * BODY_W), (H - HEADER - BOTTOM - 40) / (stage * (BODY_BOTTOM - BODY_TOP)))
-    const y = Math.max(H * 0.41, HEADER + 8 + (0.5 - BODY_TOP) * stage * s)
-    presence = { x: 24 + col / 2, y, scale: s }
+    const lean = placed.reduce((sum, w) => sum + w.placed!.w * w.placed!.h * (w.placed!.x + w.placed!.w / 2 - W / 2), 0)
+    const side = opts.side ?? (lean < 0 ? 'right' : 'left')
+    const upper = shownAll.length >= 3
+    const top = HEADER + 8 + (0.5 - BODY_TOP) * stage * s
+    const y = upper ? top : Math.max(H * 0.41, top)
+    presence = { x: side === 'left' ? 24 + col / 2 : W - 24 - col / 2, y, scale: s }
     caption = { x: presence.x, y: y + (BODY_BOTTOM - 0.5) * stage * s + 14, w: col - 8 }
-    const left = 24 + col + 24
-    region = { x: left, y: HEADER + 14, w: W - left - 28, h: H - HEADER - 14 - BOTTOM }
+    const regionX = side === 'left' ? 24 + col + 24 : 28
+    const regionW = side === 'left' ? W - regionX - 28 : W - col - 24 - 24 - 28
+    region = { x: regionX, y: HEADER + 14, w: regionW, h: H - HEADER - 14 - BOTTOM }
     mode = W >= 1024 ? 'desktop' : 'tablet'
   } else {
     // Stacked: PEPO above, its words under it, the work below.

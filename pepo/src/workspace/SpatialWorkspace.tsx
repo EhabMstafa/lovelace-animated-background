@@ -1,6 +1,26 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence } from 'framer-motion'
-import { CodeXml, FileText, Folder, Globe, Image, ListChecks, Map as MapIcon, MessagesSquare, NotebookPen, SquareTerminal, type LucideIcon } from 'lucide-react'
+import {
+  BookOpen,
+  Brain,
+  CalendarDays,
+  Clapperboard,
+  CodeXml,
+  Eye,
+  FileText,
+  Folder,
+  Globe,
+  Image,
+  ListChecks,
+  Map as MapIcon,
+  MessagesSquare,
+  Music,
+  NotebookPen,
+  Search,
+  Settings2,
+  SquareTerminal,
+  type LucideIcon,
+} from 'lucide-react'
 import { pepoEvents } from '../core/events'
 import { presence } from '../core/presence'
 import { useWorkspace, workspace, type ToolKind, type WorkspaceWindow } from '../core/workspace'
@@ -13,6 +33,8 @@ import { CodeSurface, type CodeData } from './surfaces/CodeSurface'
 import { ConversationSurface } from './surfaces/ConversationSurface'
 import { DocumentSurface, type DocumentData } from './surfaces/DocumentSurface'
 import { FilesSurface, type FilesData } from './surfaces/FilesSurface'
+import { CalendarSurface, MemorySurface, ResearchSurface, SearchSurface, SettingsSurface, type CalendarData, type MemoryData, type ResearchData, type SearchData } from './surfaces/InfoSurfaces'
+import { ImagesSurface, MediaSurface, PreviewSurface, VideoSurface, type ImagesData, type MediaData, type PreviewData, type VideoData } from './surfaces/MediaSurfaces'
 import { TasksSurface, type TasksData } from './surfaces/TasksSurface'
 import { MapSurface } from './surfaces/MapSurface'
 import { EmptySurface, NotesSurface, TerminalSurface } from './surfaces/TextSurfaces'
@@ -25,8 +47,16 @@ const ICONS: Record<ToolKind, LucideIcon> = {
   files: Folder,
   code: CodeXml,
   images: Image,
+  video: Clapperboard,
   documents: FileText,
   tasks: ListChecks,
+  calendar: CalendarDays,
+  research: BookOpen,
+  search: Search,
+  preview: Eye,
+  media: Music,
+  memory: Brain,
+  settings: Settings2,
   conversation: MessagesSquare,
 }
 
@@ -38,6 +68,14 @@ const HINTS: Record<ToolKind, string> = {
   files: 'Ask PEPO to find a file.',
   code: 'Ask PEPO to open or write code.',
   images: 'Ask PEPO to show or make an image.',
+  video: 'Ask PEPO to find a video.',
+  calendar: 'Ask PEPO to plan or check your week.',
+  research: 'Ask PEPO to look into something.',
+  search: '',
+  preview: 'Ask PEPO to preview a file.',
+  media: 'Ask PEPO to play something.',
+  memory: '',
+  settings: '',
   documents: 'Ask PEPO to draft or open a document.',
   tasks: 'Ask PEPO to keep track of something.',
   conversation: '',
@@ -72,6 +110,24 @@ function Surface({ win }: { win: WorkspaceWindow }) {
       return <CodeSurface data={d as CodeData} writing={win.active} />
     case 'documents':
       return <DocumentSurface data={d as DocumentData} />
+    case 'images':
+      return <ImagesSurface data={d as ImagesData} />
+    case 'video':
+      return <VideoSurface data={d as VideoData} />
+    case 'media':
+      return <MediaSurface data={d as MediaData} />
+    case 'preview':
+      return <PreviewSurface data={d as PreviewData} />
+    case 'calendar':
+      return <CalendarSurface data={d as CalendarData} />
+    case 'research':
+      return <ResearchSurface data={d as ResearchData} />
+    case 'search':
+      return <SearchSurface data={d as SearchData} />
+    case 'memory':
+      return <MemorySurface data={d as MemoryData} onChange={(facts) => workspace.update(win.id, { data: { facts } })} />
+    case 'settings':
+      return <SettingsSurface />
     case 'tasks':
       return <TasksSurface data={d as TasksData} onChange={(tasks) => workspace.update(win.id, { data: { tasks } })} />
     default:
@@ -134,7 +190,8 @@ export function SpatialWorkspace() {
         if (destination === 'home') workspace.minimizeAll()
         else if (destination === 'workspace') workspace.restoreAll()
         else if (destination === 'conversations') workspace.open('conversation', 'Conversation')
-        else if (destination === 'tasks' || destination === 'files') pepoEvents.emit('toolOpen', { toolId: destination })
+        else if (['tasks', 'files', 'memory', 'settings'].includes(destination)) pepoEvents.emit('toolOpen', { toolId: destination })
+        else if (destination === 'tools') pepoEvents.emit('workspaceAction', { action: 'showToolShelf' })
       }),
     [],
   )

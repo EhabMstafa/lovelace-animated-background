@@ -88,6 +88,21 @@ describe('computeLayout', () => {
     expect(r.y + r.h).toBeLessThanOrEqual(864)
   })
 
+  it('moves PEPO to the right when the user has put their work on the left', () => {
+    const placed = { ...win('notes', 2), placed: { x: 40, y: 120, w: 520, h: 420 } }
+    const l = computeLayout([win('map', 1), placed], 1536, 864)
+    expect(l.presence.x).toBeGreaterThan(768)
+    expect(l.rects['map-1'].x + l.rects['map-1'].w).toBeLessThan(l.presence.x)
+    expect(computeLayout([win('map', 1)], 1536, 864, undefined, { side: 'right' }).presence.x).toBeGreaterThan(768)
+  })
+
+  it('lifts PEPO to the upper corner when three surfaces are open', () => {
+    const two = computeLayout([win('map', 1), win('notes', 2)], 1536, 864)
+    const three = computeLayout([win('map', 1), win('notes', 2), win('browser', 3)], 1536, 864)
+    expect(three.presence.y).toBeLessThan(two.presence.y)
+    expect(three.presence.y - (stageSize(1536, 864) * three.presence.scale) * 0.36).toBeGreaterThanOrEqual(56)
+  })
+
   it('opens tools as a bottom sheet on phones', () => {
     const { presence, mode, rects } = computeLayout([win('map', 1), win('notes', 2)], 390, 844)
     expect(mode).toBe('sheet')

@@ -112,7 +112,10 @@ Then render `<PEPOApp demo={false} />` and pass `captureMic={false}` to
 
 With nothing open, the workspace is empty and PEPO sits in the centre. When
 PEPO acts:
-- **PEPO steps aside:** the Orb or Avatar glides left and scales down.
+- **PEPO steps aside:** the Orb or Avatar glides left and scales down. If
+  you move your work to the left, PEPO takes the right side instead, and
+  with three surfaces on screen it rises to the upper corner so the work
+  has the room.
 - **Surfaces arrive:** each one grows out of PEPO's light (it scales up from
   the corner nearest PEPO) and the arrangement settles around the task.
 - **Layout:** one large surface, then a large surface over a smaller one,
@@ -132,8 +135,18 @@ PEPO acts:
   folders first, details of the selection. **Code:** one file with line
   numbers, quiet highlighting and PEPO's edits marked. **Documents:** a
   readable page. **Tasks:** a checklist you can tick, with what PEPO is
-  doing. Plus Map, Notes, Terminal and Conversation. Opened from the dock in
-  the demo, they show sample content (`demo/sampleContent.ts`).
+  doing. **Images:** a grid and a large view. **Video:** play / pause, a
+  scrubber and captions. **Media:** what's playing and the queue.
+  **Calendar:** a week, with PEPO's proposals dashed until confirmed.
+  **Research:** the question, findings with numbered sources. **Search:**
+  across files, notes and the conversation, on this device. **Preview:** a
+  file shown as itself. Plus Map, Notes, Terminal and Conversation. Opened
+  from the dock in the demo, they show sample content
+  (`demo/sampleContent.ts`).
+- **Memory and Settings:** the navigation opens them as surfaces. Memory
+  lists what PEPO remembers, each item one click from forgotten. Settings
+  holds presentation (Avatar / Orb), theme, motion and privacy. **Tools**
+  opens the shelf.
 - **Light streams:** fine particles travel from PEPO to a surface when it
   appears and for as long as PEPO is writing into it, marked by a small
   pulse in the surface's label.
@@ -337,7 +350,7 @@ The vendored Three.js build keeps its MIT notice (`THIRD_PARTY_NOTICES.txt`).
 - One draw call for the Orb's particles, with all motion computed on the GPU. Invisible particles skip rasterisation.
 - FATHI is loaded only when the Avatar is first chosen, and paces itself (its own 10–20 fps timer). The Orb's canvas pauses while FATHI is shown.
 - `frameloop="demand"` redraws at 60 fps, or 30 fps while PEPO is calm beside open surfaces. Nothing is drawn while the tab is hidden; FATHI (which paces itself with timers) is stopped too and resumes without replaying. Coming back from a pause, the Orb joins the current state at once.
-- Fewer Orb particles at phone widths. `prefers-reduced-motion` slows time and switches off parallax; FATHI holds still.
+- The same Orb at every size (phones draw every particle); the quality governor lowers resolution if frames run long. `prefers-reduced-motion` slows time and switches off parallax.
 - The background is static apart from CSS-variable parallax.
 - While surfaces are open, PEPO renders at up to 1.5× resolution and at
   30 fps when calm.

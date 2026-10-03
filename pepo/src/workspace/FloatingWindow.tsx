@@ -66,6 +66,9 @@ export function FloatingWindow({
   useLayoutEffect(() => {
     if (!pendingReset.current) return
     pendingReset.current = false
+    // Stop anything still moving the offset (a drag settling) before clearing it.
+    dx.stop()
+    dy.stop()
     dx.set(0)
     dy.set(0)
     const id = requestAnimationFrame(() => setInstant(false))
@@ -139,7 +142,9 @@ export function FloatingWindow({
       dragListener={false}
       dragMomentum={false}
       dragConstraints={{ left: -r.x + 8, top: -r.y + 56, right: W - r.x - r.w - 8, bottom: H - r.y - 60 }}
-      dragElastic={0.04}
+      // No elasticity at the edges: nothing animates after release, so the
+      // placement committed on release is exactly where the surface sits.
+      dragElastic={0}
       onDragStart={() => setDragging(true)}
       onDragEnd={() => {
         setDragging(false)

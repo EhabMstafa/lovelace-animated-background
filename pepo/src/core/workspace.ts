@@ -1,7 +1,25 @@
 import { useSyncExternalStore } from 'react'
 
 /** Tools PEPO can place on the workspace. */
-export type ToolKind = 'map' | 'notes' | 'terminal' | 'browser' | 'files' | 'code' | 'images' | 'documents' | 'tasks' | 'conversation'
+export type ToolKind =
+  | 'map'
+  | 'notes'
+  | 'terminal'
+  | 'browser'
+  | 'files'
+  | 'code'
+  | 'images'
+  | 'video'
+  | 'documents'
+  | 'tasks'
+  | 'calendar'
+  | 'research'
+  | 'search'
+  | 'preview'
+  | 'media'
+  | 'memory'
+  | 'settings'
+  | 'conversation'
 
 export interface Rect {
   x: number

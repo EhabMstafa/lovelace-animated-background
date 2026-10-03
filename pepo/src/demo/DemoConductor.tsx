@@ -42,7 +42,8 @@ const ITINERARY = [
 
 const TITLES: Record<ToolKind, string> = {
   map: 'Map', notes: 'Notes', terminal: 'Terminal', browser: 'Browser', files: 'Files', code: 'Code', images: 'Images',
-  documents: 'Norway trip · plan', tasks: 'Tasks', conversation: 'Conversation',
+  documents: 'Norway trip · plan', tasks: 'Tasks', conversation: 'Conversation', video: 'Video', calendar: 'Calendar',
+  research: 'Research', search: 'Search', preview: 'Preview', media: 'Media', memory: 'Memory', settings: 'Settings',
 }
 
 type Cue = { at: number; kind: PEPOEventMap['cue']['kind'] }
