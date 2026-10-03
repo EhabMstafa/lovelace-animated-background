@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { presence, type PresenceForm, type PresenceState } from '../core/presence'
 import { getPointer, pointerActive } from '../hooks/usePointer'
-import { createFathiMotion, presenceLight, type FathiState } from './avatar/fathiMotion'
+import { createHumanMotion, presenceLight, type AvatarState } from './avatar/humanMotion'
 import { traceFragment, traceVertex } from './avatar/shaders'
 import { useHeadCloud } from './avatar/useHeadCloud'
 import { bodyFragment, bodyVertex } from './body/particleShaders'
@@ -11,7 +11,8 @@ import { createRibbonGeometry, ribbonVertex } from './lines'
 import {
   assignFaceTargets,
   createOrbParticles,
-  createStarNodes,
+  createFieldLines,
+  createLineNodes,
   createStreams,
   ellipsePoints,
   type ParticleCounts,
@@ -52,15 +53,15 @@ const GLOW_SIZE = 4.6
 const TILT = new THREE.Euler(0.18, 0, -0.12)
 const MORPH_SECONDS = 1.55
 
-/** PEPO's presence states, in the vocabulary of FATHI's motion controller. */
-const FATHI_STATE: Record<PresenceState, FathiState> = {
+/** PEPO's presence states, as the Avatar's body language understands them. */
+const AVATAR_STATE: Record<PresenceState, AvatarState> = {
   idle: 'idle',
   waiting: 'idle',
   listening: 'listening',
   understanding: 'thinking',
   thinking: 'thinking',
+  working: 'thinking',
   speaking: 'speaking',
-  working: 'tool',
 }
 export const CAMERA_Z = 8.2
 
@@ -84,6 +85,7 @@ const additive = (params: THREE.ShaderMaterialParameters) =>
 export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBodyProps) {
   const root = useRef<THREE.Group>(null)
   const spinGroup = useRef<THREE.Group>(null)
+  const fieldGroup = useRef<THREE.Group>(null)
   const orbitRefs = useRef<(THREE.Group | null)[]>([])
   const orbitNodeRefs = useRef<(THREE.Object3D | null)[]>([])
   /** Layers that exist only in the Orb; hidden (not drawn) in the Avatar. */
@@ -94,16 +96,17 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
 
   const params = useRef<OrbParams>({ ...ORB_STATES.idle })
   const clock = useRef({ t: 0, rot: 0, flow: 0, energy: 0, morph: 0 })
-  const motion = useMemo(() => createFathiMotion(), [])
+  const motion = useMemo(() => createHumanMotion(), [])
 
   const cloud = useHeadCloud(counts.total)
 
   // ── Geometry ──
   const particleGeo = useMemo(() => createOrbParticles(counts), [counts])
-  const streamGeo = useMemo(() => createRibbonGeometry(createStreams(3, 6, 11, 0.86, 0.98)), [])
+  const fieldLines = useMemo(() => createFieldLines(12, 11), [])
+  const streamGeo = useMemo(() => createRibbonGeometry(fieldLines), [fieldLines])
   const innerStreamGeo = useMemo(() => createRibbonGeometry(createStreams(2, 4, 23, 0.5, 0.7, 90)), [])
   const orbitGeos = useMemo(() => ORBITS.map((o) => createRibbonGeometry([ellipsePoints(o.r[0], o.r[1])], true)), [])
-  const starGeo = useMemo(() => createStarNodes(14, 5), [])
+  const starGeo = useMemo(() => createLineNodes(fieldLines, 12, 5), [fieldLines])
   const nodeGeo = useMemo(() => {
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3))
@@ -144,6 +147,8 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       uJaw: { value: 0 },
       uBlink: { value: 0 },
       uBreath: { value: 0 },
+      uGaze: { value: new THREE.Vector2() },
+      uLean: { value: 0 },
       uFaceScale: { value: 1.18 },
       uFaceOffset: { value: new THREE.Vector3(0, -0.32, 0) },
     }),
@@ -172,10 +177,12 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
           uPixelRatio: { value: pixelRatio },
           uMorph: { value: 0 },
           uOrbTilt: { value: new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationFromEuler(TILT)) },
+          // Fewer, brighter points on phones; finer, fainter points at full density.
+          uFaceGain: { value: counts.total > 100000 ? 0.72 : 1.0 },
           ...pose,
         },
       }),
-    [pixelRatio, pose],
+    [pixelRatio, pose, counts.total],
   )
 
   const fade = useMemo(() => ({ value: 1 }), [])
@@ -195,7 +202,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
         uFade: fade,
       },
     })
-  const streamMat = useMemo(() => makeStreamMat(0.3, 16), [pixelRatio])
+  const streamMat = useMemo(() => makeStreamMat(0.3, 5.5), [pixelRatio])
   const innerStreamMat = useMemo(() => makeStreamMat(0, 3.5), [pixelRatio])
 
   const orbitMats = useMemo(
@@ -232,7 +239,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
         uTint: { value: new THREE.Color(tint) },
       },
     })
-  const starMat = useMemo(() => makeStarMat(40, '#4BC8FF'), [pixelRatio])
+  const starMat = useMemo(() => makeStarMat(30, '#7FD4FF'), [pixelRatio])
   const nodeMats = useMemo(() => ORBITS.map((o) => makeStarMat(26, o.tint)), [pixelRatio])
 
   const skinMat = useMemo(
@@ -325,23 +332,25 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     fade.value = orbVisible
     for (const obj of orbOnly.current) if (obj) obj.visible = orbVisible > 0.001
 
-    // The Avatar's life comes from FATHI's own motion controller: head pose,
-    // gaze, blinks, brows, breath, nods, and a jaw that only speech can open.
+    // The Avatar's life: natural human motion (see avatar/humanMotion.ts).
+    // Only speech output reaches it; the microphone never moves the face.
     const ptr = reducedMotion ? { x: 0, y: 0 } : getPointer()
-    const fstate = FATHI_STATE[state]
-    motion.setState(fstate)
+    const astate = AVATAR_STATE[state]
+    motion.setState(astate)
     motion.setReduced(reducedMotion)
-    motion.setAmplitude(state === 'speaking' || state === 'listening' ? e : 0)
+    motion.setAmplitude(state === 'speaking' ? e : 0)
     motion.setPointer(ptr.x, -ptr.y, pointerActive())
     const mo = motion.step(dt)
     pose.uHead.value.set(mo.yaw, mo.pitch, mo.roll)
-    pose.uMouth.value.set(mo.brow, mo.viseme[1], mo.viseme[2])
+    pose.uMouth.value.set(0, mo.viseme[1], mo.viseme[2])
     pose.uBody.value.set(mo.body[0], mo.body[1], 0)
     pose.uEyes.value.set(mo.brows[0], mo.brows[1], mo.squint)
+    pose.uGaze.value.set(mo.gaze[0], mo.gaze[1])
+    pose.uLean.value = mo.lean
     pose.uJaw.value = mo.jaw
     pose.uBlink.value = mo.blink
     pose.uBreath.value = mo.breath
-    const light = presenceLight(fstate, c.energy)
+    const light = presenceLight(astate, state === 'speaking' ? c.energy : 0)
     const lb = 1 - Math.exp(-dt / 0.28)
     const pl = pose.uPresence.value
     pl.set(pl.x + (light[0] - pl.x) * lb, pl.y + (light[1] - pl.y) * lb, pl.z + (light[2] - pl.z) * lb)
@@ -362,6 +371,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     u.uMorph.value = m
     traceMat.uniforms.uReveal.value = THREE.MathUtils.smoothstep(m, 0.55, 1)
 
+    if (fieldGroup.current) fieldGroup.current.scale.setScalar(p.scale * (1 + m * 0.25))
     if (spinGroup.current) {
       spinGroup.current.rotation.y = c.rot
       // The glass swells a little as it dissolves.
@@ -369,7 +379,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     }
 
     streamMat.uniforms.uTime.value = c.t
-    streamMat.uniforms.uAlpha.value = (0.95 + p.organize * 0.25) * p.glow
+    streamMat.uniforms.uAlpha.value = (0.42 + p.organize * 0.25) * p.glow
     // The Orb's own voice: streams surge with speech, orbits brighten while listening.
     streamMat.uniforms.uPulse.value = 0.35 + p.organize * 0.5 + p.activity * 0.3 + p.speak * c.energy * 0.9 + p.listen * c.energy * 0.4
     streamMat.uniforms.uViolet.value = p.violet
@@ -435,8 +445,10 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
           <mesh material={skinMat} renderOrder={1}>
             <sphereGeometry args={[RADIUS * 0.995, 72, 54]} />
           </mesh>
-          <mesh geometry={streamGeo} material={streamMat} renderOrder={2} frustumCulled={false} />
           <mesh geometry={innerStreamGeo} material={innerStreamMat} renderOrder={2} frustumCulled={false} />
+        </group>
+        <group ref={fieldGroup}>
+          <mesh geometry={streamGeo} material={streamMat} renderOrder={2} frustumCulled={false} />
           <points geometry={starGeo} material={starMat} renderOrder={5} />
         </group>
       </group>

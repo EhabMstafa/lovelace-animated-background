@@ -27,6 +27,7 @@ export const bodyVertex = /* glsl */ `
   uniform float uPixelRatio;
   uniform float uMorph;
   uniform mat3 uOrbTilt;
+  uniform float uFaceGain;
 
   attribute vec4 aSeed;
   attribute float aKind;     // orb: 0 shell, 1 inner, 2 halo, 3 latent (hidden in the Orb)
@@ -87,7 +88,7 @@ export const bodyVertex = /* glsl */ `
     color = mix(color, C_WHITE, sparkle * 0.55);
 
     alpha =
-        shell * (0.22 + 0.42 * pow(fres, 3.0)) * mix(0.28, 1.0, step(0.0, facing))
+        shell * (0.2 + 0.22 * pow(fres, 3.0)) * mix(0.28, 1.0, step(0.0, facing))
       + inner * (0.14 + 0.55 * uDepth) * (0.4 + 0.6 * aSeed.z)
       + halo * (0.1 + 0.3 * uListen * uEnergy) * (0.35 + 0.65 * aSeed.x);
     alpha *= 0.72 + 0.28 * sin(t * (0.5 + aSeed.z * 1.3) + aSeed.x * 40.0);
@@ -114,10 +115,12 @@ export const bodyVertex = /* glsl */ `
     float lip = lipTrace(bind) * warm;
     float speechGlow = (1.0 + uJaw * .06 * warm) * mix(uPresence.x, uPresence.y, warm);
     float shade = 0.4 + 0.85 * light.x + 0.45 * light.z + 0.5 * light.y;
-    alpha = aFaceW * (0.5 + 0.5 * depth) * 0.82 * shade * smoothstep(-1.96, -1.74, bind.y)
+    // The mask glows: FATHI's radiant orange carries more light than the line work.
+    alpha = aFaceW * (0.5 + 0.5 * depth) * uFaceGain * shade * (1.0 + 0.7 * warm) * smoothstep(-1.96, -1.74, bind.y)
           * finish.x * speechGlow * (1.0 + lip * (.65 + uJaw * .22));
     color = avatarColor(bind, finish.y, lip, light);
-    size = 0.85 + 0.35 * aSeed.y;
+    // Full-density artwork: fine points, like a high-resolution drawing.
+    size = 0.55 + 0.22 * aSeed.y;
   }
 
   void main() {
@@ -157,10 +160,16 @@ export const bodyVertex = /* glsl */ `
       size = mix(sizeOrb, sizeFace, e);
     }
 
+    vAlpha = alpha * uGlow;
+    if (vAlpha < 0.002) {
+      // Invisible (latent Orb particles): skip rasterising entirely.
+      gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+      gl_PointSize = 0.0;
+      return;
+    }
     gl_Position = projectionMatrix * mv;
     gl_PointSize = uSize * size * uPixelRatio * (9.0 / -mv.z);
     vColor = color;
-    vAlpha = alpha * uGlow;
   }
 `
 

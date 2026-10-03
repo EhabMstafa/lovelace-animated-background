@@ -44,9 +44,11 @@ export function DemoConductor() {
           done()
           return
         }
-        const phrase = Math.max(0, Math.sin(t * 1.9 + 0.3)) ** 0.5
+        // Two phrases with a real pause between them ("I found three new results. / Want me to keep going?").
+        const inPhrase = (t > 0.05 && t < 1.9) || (t > 2.45 && t < 4.0)
+        const edge = Math.min(1, Math.min(Math.abs(t - 0.05), Math.abs(t - 1.9), Math.abs(t - 2.45), Math.abs(t - 4.0)) * 8)
         const syllable = 0.5 + 0.5 * Math.sin(t * 22 + Math.sin(t * 5) * 2.5)
-        presence.setEnergy(phrase * (0.35 + 0.65 * syllable))
+        presence.setEnergy(inPhrase ? edge * (0.35 + 0.65 * syllable) : 0)
         raf = requestAnimationFrame(tick)
       }
       raf = requestAnimationFrame(tick)
@@ -59,11 +61,14 @@ export function DemoConductor() {
       later(1100, () => {
         set('thinking')
         later(2200, () => {
+          // A breath before the voice: the body prepares, then audio begins.
           set('speaking', { caption: SAMPLE_REPLY })
-          speak(3800, () => {
-            set('idle')
-            later(4200, () => presence.update({ caption: null }))
-          })
+          later(520, () =>
+            speak(4200, () => {
+              set('idle')
+              later(4200, () => presence.update({ caption: null }))
+            }),
+          )
         })
       })
     }

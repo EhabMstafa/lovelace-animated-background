@@ -41,6 +41,8 @@ export const fathiRig = /* glsl */ `
   uniform float uJaw;
   uniform float uBlink;
   uniform float uBreath;
+  uniform vec2 uGaze;      // eye direction, -1..1
+  uniform float uLean;     // forward lean of head and chest
   uniform float uFaceScale;
   uniform vec3 uFaceOffset;
 
@@ -86,6 +88,10 @@ export const fathiRig = /* glsl */ `
     float browField = browX * browY * (1.0 - warm);
     float sideBrow = mix(uEyes.x, uEyes.y, step(0.0, p.x));
     p.y += sideBrow * .050 * browField;
+    // Eyes: the iris area follows the gaze; the upper lid rides a little with it.
+    float iris = exp(-pow(length(vec2(abs(bind.x) - .305, bind.y + .015)) / .05, 2.0)) * (1.0 - warm) * eyeX;
+    p.x += uGaze.x * .016 * iris;
+    p.y += uGaze.y * .009 * iris + uGaze.y * .005 * upperLid;
     float head = smoothstep(-1.35, -.48, bind.y);
     float torso = 1.0 - smoothstep(-1.30, -.78, p.y);
     float shoulder = torso * smoothstep(.34, .78, abs(p.x));
@@ -99,7 +105,11 @@ export const fathiRig = /* glsl */ `
     float cy = cos(uHead.x), sy = sin(uHead.x); q = vec3(cy * q.x + sy * q.z, q.y, -sy * q.x + cy * q.z);
     float cp = cos(uHead.y), sp = sin(uHead.y); q = vec3(q.x, cp * q.y - sp * q.z, sp * q.y + cp * q.z);
     float cr = cos(uHead.z), sr = sin(uHead.z); q = vec3(cr * q.x - sr * q.y, sr * q.x + cr * q.y, q.z);
-    return mix(p, q + vec3(0.0, -.48, 0.0), head);
+    vec3 posed = mix(p, q + vec3(0.0, -.48, 0.0), head);
+    // Leaning in: the head leads, the chest follows a little.
+    posed.z += uLean * (head + 0.35 * torso);
+    posed.y -= uLean * 0.2 * head;
+    return posed;
   }
 
   float softPatch(vec3 p, float cx, float cy, float sx, float sy) {
@@ -121,9 +131,9 @@ export const fathiRig = /* glsl */ `
   const vec3 A_AZURE    = vec3(0.00, 0.58, 1.00);
   const vec3 A_CYAN     = vec3(0.00, 0.86, 1.00);
   const vec3 A_ICE      = vec3(0.62, 0.93, 1.00);
-  /** The mask: luminous ice, a cool silver-cyan that reads as fabric over the blue face. */
+  /** The mask: FATHI's radiant orange, warming to amber where the light lands. */
   vec3 maskTone(float lit) {
-    return mix(vec3(0.36, 0.74, 1.00) * 0.85, vec3(0.86, 0.97, 1.00), smoothstep(0.3, 1.0, lit));
+    return mix(vec3(1.00, 0.46, 0.16), vec3(1.00, 0.78, 0.52), smoothstep(0.25, 1.0, lit));
   }
 
   /** Light on the relief: x wrapped key light, y specular, z edge (relief rim). */

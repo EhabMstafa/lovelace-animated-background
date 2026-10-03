@@ -5,9 +5,9 @@
  *
  * Reads fathi-cloud.bin (FTH2 points, weights, warm/mask flag), the depth and
  * contour sidecars that refine z and xy, and fathi-strands.json. Applies the
- * sidecars, keeps the same deterministic display sample the original renderer
- * draws in motion (hash < 0.20 + 0.30·weight), adds the ear-bridge dust, and
- * flattens the visible strands into segments.
+ * sidecars and keeps EVERY source point (FATHI's full original density, not
+ * the lighter sample its renderer drew in motion), adds the ear-bridge dust,
+ * and flattens the visible strands into segments.
  *
  * It also estimates a surface normal for every point from FATHI's depth
  * (a smoothed height field over the whole cloud), so the renderer can light
@@ -93,8 +93,6 @@ const normalAt = (x, y) => {
 const points = []
 for (let i = 0; i < N; i++) {
   const weight = cloud.getUint8(12 + 6 * N + i)
-  const hash = (Math.imul(i + 1, 2654435761) >>> 0) / 4294967296
-  if (hash >= 0.2 + 0.3 * (weight / 255)) continue
   points.push([
     contour.getFloat32(40 + i * 8, true),
     contour.getFloat32(44 + i * 8, true),

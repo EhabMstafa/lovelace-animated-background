@@ -45,7 +45,7 @@ src/
 │  ├─ avatar/
 │  │  ├─ assets/fathi.bin       the FATHI point-cloud artwork, baked (scripts/build-fathi.mjs)
 │  │  ├─ fathiHead.ts           decodes the asset (points, weights, mask flag, strands)
-│  │  ├─ fathiMotion.ts         FATHI's motion controller: pose, gaze, blinks, brows, breath, nods, jaw
+│  │  ├─ humanMotion.ts         natural human motion: breath, blinks, gaze, head, brows, jaw, posture
 │  │  └─ shaders.ts             FATHI's strands (neck flow, throat, shoulder links, jaw guide)
 │  ├─ lines.ts                  screen-space ribbon lines (constant pixel width, soft glow)
 │  └─ glsl.ts                   shared palette, helpers, FATHI's rig and the Avatar's colour
@@ -107,32 +107,61 @@ and each form plays every presence state in its own way:
 
 | State | Orb | Avatar |
 | --- | --- | --- |
-| listening | leans in, a ripple runs through, outer motes and orbits follow the voice | the face brightens with your voice, steady focused gaze, "go on" nods |
-| thinking | violet joins, interior particles travel, inner streams appear | violet joins, the gaze drifts aside, brows lift, the head tilts in thought |
-| speaking | light waves from the core to the surface, streams surge with speech | the jaw moves under the mask, the mask glows with the voice, slow sway and emphasis nods |
+| listening | leans in, a ripple runs through, outer motes and orbits follow the voice | eyes settle on you, the head stills and leans in, sparse silent acknowledgements |
+| thinking | violet joins, interior particles travel, inner streams appear | stillness, eyes drift up and aside, a slow blink, maybe a small tilt |
+| speaking | light waves from the core to the surface, streams surge with speech | a breath first; the jaw follows the voice, head and eyes follow phrases |
 
-The Avatar is FATHI: the original point-cloud artwork (about 53,700 drawn
-points with shallow depth, plus its neck, throat, shoulder and jaw strands),
-baked from the FATHI avatar export by `scripts/build-fathi.mjs`. Its rig and
-motion controller are ported with their tuning intact:
-- **Rig:** the jaw and mouth corners under the mask, blinks and squint,
-  brows, chest breathing, and head pose pivoting at the neck.
-- **Motion:** head poses and gaze that differ by state, blinks timed around
-  phrases, "go on" nods while listening, emphasis nods on speech onsets, and
-  a slow sway while talking.
-- **Gaze:** follows the pointer only while it moves.
-- **Jaw:** only speech output opens it. Microphone energy brightens the face
-  but never moves the mouth.
+The Avatar is FATHI: the original point-cloud artwork at its full density
+(about 160,900 points with shallow depth, plus its neck, throat, shoulder
+and jaw strands), baked from the FATHI avatar export by
+`scripts/build-fathi.mjs`. It is drawn with fine points for a high-resolution
+line drawing; phones get an even 60,000-point subset. FATHI's rig is ported
+intact (jaw and mouth corners under the mask, blinks and squint, brows, chest
+breathing, head pose pivoting at the neck), plus two additions: the eyes
+follow the gaze, and the head and chest can lean forward.
 
-Every point also carries a surface normal, estimated at bake time from a
-smoothed height field of FATHI's depth. The renderer lights the artwork as a
+Every point carries a surface normal, estimated at bake time from a smoothed
+height field of FATHI's depth. That lets the renderer light the artwork as a
 3D relief: a key light from the upper left that turns with the head, specular
-highlights, and bright relief edges. The palette is saturated and kept low in
-red, so dense additive light stays blue instead of washing out to white:
-electric blue in shadow, azure in light, and vivid cyan where the light lands.
-The mask is luminous ice (a silver-cyan) instead of the original orange.
-Thinking adds a touch of violet, as it does in the Orb. Parallax is kept
-small because the artwork is a shallow relief.
+highlights and bright relief edges. The line work is saturated electric blue,
+azure and cyan. The mask is FATHI's radiant orange, warming to amber where
+the light lands.
+
+#### Natural human motion
+
+`humanMotion.ts` aims for a calm person sitting in front of a webcam: 80%
+stillness and 20% meaningful movement.
+- **Independent clocks:** breath, blinks, gaze, head and posture, brows and
+  shoulders each run on their own irregular clock and are never
+  synchronised.
+- **No loops:** behaviour is chosen by weighted probabilities, so no sequence
+  repeats.
+- **Springs:** movement accelerates, overshoots a hair and settles.
+- **Breath:** every cycle is 3.5–6 s with its own depth, plus an occasional
+  deeper breath and a quick inhale before speaking.
+- **Blinks:** irregular 1–10 s intervals with occasional long gaps. They can
+  be partial, slow or (rarely) double, come before speech or after a thought,
+  and happen less often while listening.
+- **Gaze:** near the camera about 80% of the time, with micro-saccades and
+  glances. The eyes move first and the head follows 1–2° about 0.1–0.25 s
+  later. Gaze follows the pointer only while it moves.
+- **Head:** usually still, with irregular corrections of 0.3–3° and a rare
+  conversational turn while speaking.
+- **Listening:** the eyes settle on you, the head stills and leans in. Silent
+  acknowledgements stay sparse: a micro nod, an agreement nod, at most a
+  double nod, or a small tilt.
+- **Thinking:** stillness, then the eyes drift up and aside, a slow blink,
+  and maybe a small tilt or brow asymmetry.
+- **Pre-speech:** an inhale, a posture adjustment, the eyes return, maybe a
+  blink. The demo waits about half a second before the voice starts.
+- **Speaking:** the jaw follows the speech envelope; everything larger
+  follows phrases, detected from pauses in the audio:
+  - A phrase starts with a forward emphasis, a micro nod or a brow lift.
+  - A phrase ends with a blink, a settling nod, a glance or stillness.
+  - A long phrase may glance away and come back.
+  - The head never bobs with the waveform.
+- **Interruption:** the jaw releases within about 150 ms, the eyes find you,
+  there is a small head adjustment, and then the listening posture.
 
 ### Credits
 
@@ -142,7 +171,7 @@ project's ownership.
 
 ### Performance
 
-- One draw call for all 53,700 body particles (30,000 on phones), with all motion computed on the GPU.
+- One draw call for all 160,900 body particles (60,000 on phones), with all motion computed on the GPU. Invisible particles skip rasterisation.
 - The Avatar asset is decoded just after the Orb's first frames.
 - Orb-only layers stop drawing while the Avatar is shown.
 - `frameloop="demand"` redraws at 30 fps in calm states and 60 fps in active ones. Nothing is drawn while the tab is hidden.
