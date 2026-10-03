@@ -25,7 +25,8 @@ describe('computeLayout', () => {
         expect(r.x).toBeGreaterThan(presence.x)
         expect(r.x + r.w).toBeLessThanOrEqual(1536)
         expect(r.y).toBeGreaterThanOrEqual(60)
-        expect(r.y + r.h).toBeLessThanOrEqual(864 - 160)
+        // The voice control has moved into PEPO's column: the work reaches down to the dock.
+        expect(r.y + r.h).toBeLessThanOrEqual(864 - 80)
       }
       for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) expect(overlaps(list[i], list[j])).toBe(false)
     }
@@ -56,14 +57,19 @@ describe('computeLayout', () => {
   it('keeps PEPO below the header and its words clear of the surfaces at every size', () => {
     for (const [W, H] of [[1536, 864], [1280, 720], [1100, 650], [900, 640], [800, 700], [768, 1024], [700, 900]]) {
       const windows = [win('map', 1), win('notes', 2), win('terminal', 3)]
-      const { presence, caption, rects } = computeLayout(windows, W, H)
+      const { presence, caption, voice, rects } = computeLayout(windows, W, H)
       const S = stageSize(W, H) * presence.scale
       // The body's top (14% down its stage) stays under the 56px header.
       expect(presence.y - S / 2 + 0.14 * S).toBeGreaterThanOrEqual(56)
       const words = { x: caption.x - caption.w / 2, y: caption.y, w: caption.w, h: 44 }
+      // Side by side the voice control sits in PEPO's column, under its words;
+      // stacked, it stays centred under the work.
+      const control = voice ? { x: voice.x - voice.w / 2, y: H - 190, w: voice.w, h: 82 } : null
+      if (control) expect(words.y + words.h).toBeLessThanOrEqual(control.y)
       for (const r of Object.values(rects)) {
         expect(overlaps(words, r)).toBe(false)
-        expect(r.y + r.h).toBeLessThanOrEqual(H - 160)
+        if (control) expect(overlaps(control, r)).toBe(false)
+        expect(r.y + r.h).toBeLessThanOrEqual(H - (control ? 80 : 160))
       }
     }
   })

@@ -7,6 +7,8 @@ export interface SpatialLayout {
   presence: { x: number; y: number; scale: number }
   /** Where PEPO's words sit while it works: under the presence, clear of the surfaces. */
   caption: { x: number; y: number; w: number }
+  /** Side by side, the voice control moves into PEPO's column (centre x, width), freeing the middle. */
+  voice?: { x: number; w: number }
   /** Surfaces on screen. Open surfaces without a rect wait in the dock until brought forward. */
   rects: Record<string, Rect>
   mode: 'desktop' | 'tablet' | 'sheet'
@@ -19,6 +21,12 @@ const GAP = 14
 const HEADER = 64
 /** Room kept for the voice surface and the dock. */
 const BOTTOM = 168
+/** Room kept for the dock alone (the voice surface has moved into PEPO's column). */
+const DOCK = 92
+/** The voice surface's top, measured from the bottom of the screen. */
+const VOICE_TOP = 190
+/** Room kept under PEPO for its words. */
+const CAPTION_ROOM = 76
 const MIN_H = 150
 
 /** The presence stage's side in px, as the stylesheet sizes it (--stage). */
@@ -83,6 +91,7 @@ export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stag
 
   let presence: SpatialLayout['presence']
   let caption: SpatialLayout['caption']
+  let voice: SpatialLayout['voice']
   let region: Rect
   let mode: SpatialLayout['mode']
 
@@ -90,19 +99,24 @@ export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stag
     // Side by side: PEPO keeps a column at one side, the work fills the
     // other. Left by default; right when the user has moved their work to the
     // left (or the runtime asks for it). With a full workspace PEPO rises to
-    // the upper corner, so its words sit clear of the work below it.
+    // the upper corner, so its words sit clear of the work below it. The
+    // voice control follows PEPO into its column, so the work can reach down
+    // to the dock.
     const col = Math.min(600, Math.max(260, W * 0.36))
-    const s = Math.min(0.8, col / (stage * BODY_W), (H - HEADER - BOTTOM - 40) / (stage * (BODY_BOTTOM - BODY_TOP)))
+    const voiceTop = H - VOICE_TOP
+    const s = Math.min(0.8, col / (stage * BODY_W), (voiceTop - CAPTION_ROOM - HEADER - 8) / (stage * (BODY_BOTTOM - BODY_TOP)))
     const lean = placed.reduce((sum, w) => sum + w.placed!.w * w.placed!.h * (w.placed!.x + w.placed!.w / 2 - W / 2), 0)
     const side = opts.side ?? (lean < 0 ? 'right' : 'left')
     const upper = shownAll.length >= 3
     const top = HEADER + 8 + (0.5 - BODY_TOP) * stage * s
-    const y = upper ? top : Math.max(H * 0.41, top)
+    const lowest = voiceTop - CAPTION_ROOM - (BODY_BOTTOM - 0.5) * stage * s
+    const y = upper ? top : Math.max(top, Math.min(H * 0.41, lowest))
     presence = { x: side === 'left' ? 24 + col / 2 : W - 24 - col / 2, y, scale: s }
     caption = { x: presence.x, y: y + (BODY_BOTTOM - 0.5) * stage * s + 14, w: col - 8 }
+    voice = { x: presence.x, w: col - 8 }
     const regionX = side === 'left' ? 24 + col + 24 : 28
     const regionW = side === 'left' ? W - regionX - 28 : W - col - 24 - 24 - 28
-    region = { x: regionX, y: HEADER + 14, w: regionW, h: H - HEADER - 14 - BOTTOM }
+    region = { x: regionX, y: HEADER + 14, w: regionW, h: H - HEADER - 14 - DOCK }
     mode = W >= 1024 ? 'desktop' : 'tablet'
   } else {
     // Stacked: PEPO above, its words under it, the work below.
@@ -163,5 +177,5 @@ export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stag
     })
   }
   keepPlaced()
-  return { presence, caption, rects, mode }
+  return { presence, caption, voice, rects, mode }
 }

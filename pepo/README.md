@@ -116,6 +116,9 @@ PEPO acts:
   you move your work to the left, PEPO takes the right side instead, and
   with three surfaces on screen it rises to the upper corner so the work
   has the room.
+- **The voice control goes with PEPO:** side by side, "Talk to PEPO" glides
+  into PEPO's column under its words, so the middle is free and the work
+  reaches down to the dock. It returns to the centre with PEPO.
 - **Surfaces arrive:** each one grows out of PEPO's light (it scales up from
   the corner nearest PEPO) and the arrangement settles around the task.
 - **Layout:** one large surface, then a large surface over a smaller one,

@@ -122,7 +122,8 @@ export const glowFragment = /* glsl */ `
     vec3 c = rimLight(sn, uViolet);
     vec3 deep = mix(C_DEEP, C_BLUE, 0.3);
     float orb = uFade;
-    float a = bloom * 0.45 * orb + halo * 0.32 * orb + wide * (0.12 + 0.16 * orb);
+    // The halo and the wide glow are kept soft (about half), so PEPO isn't wrapped in a cloud.
+    float a = bloom * 0.45 * orb + halo * 0.2 * orb + wide * (0.05 + 0.08 * orb);
     vec3 col = mix(deep, c, clamp(bloom + halo * 0.6, 0.0, 1.0) * orb);
     // Contact flare under the Orb.
     float flare = exp(-pow(p.x / (r * 0.42), 2.0) - pow((p.y + r * 1.01) / (r * 0.045), 2.0));

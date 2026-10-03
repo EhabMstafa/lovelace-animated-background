@@ -166,8 +166,12 @@ export function SpatialWorkspace() {
     root.style.setProperty('--caption-x', `${layout.caption.x}px`)
     root.style.setProperty('--caption-y', `${layout.caption.y}px`)
     root.style.setProperty('--caption-w', `${layout.caption.w}px`)
+    const side = busy && layout.voice
+    root.style.setProperty('--voice-dx', side ? `${layout.voice!.x - w / 2}px` : '0px')
+    root.style.setProperty('--voice-w', side ? `${layout.voice!.w}px` : '100vw')
+    root.dataset.voice = side ? 'side' : 'centre'
     root.dataset.workspace = busy ? layout.mode : 'empty'
-  }, [layout, visible.length])
+  }, [layout, visible.length, w])
 
   // Escape puts the work away into the dock (when PEPO isn't listening and
   // nothing is being typed). Nothing is closed: the arrangement comes back.

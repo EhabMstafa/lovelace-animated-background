@@ -320,6 +320,11 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
   gap: 12px;
   margin-bottom: 30px;
 }
+/* Side by side, the voice control glides into PEPO's column with it. */
+.voice-surface { transform: translateX(var(--voice-dx, 0px)); transition: transform 0.8s var(--ease-out); }
+:root[data-voice='side'] .command.is-typing { width: min(520px, var(--voice-w)); }
+:root[data-voice='side'] .transcript,
+:root[data-voice='side'] .transcript p { max-width: var(--voice-w); }
 
 .transcript {
   min-height: 22px;
@@ -812,7 +817,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
 :root[data-workspace='sheet'] .dock-wrap.is-compact { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .presence-stage, .fathi-stage, .ambient-orb-reflection { transition: none; }
+  .presence-stage, .fathi-stage, .ambient-orb-reflection, .voice-surface { transition: none; }
 }
 
 /* With PEPO stepped aside, its words stay with it, under the presence. */
