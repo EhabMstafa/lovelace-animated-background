@@ -62,8 +62,8 @@ export function MapSurface({ progress = 0 }: { progress?: number }) {
             <stop offset="1" stopColor="#8B5CFF" />
           </linearGradient>
           <radialGradient id="land-grad" cx="0.35" cy="0.75" r="0.9">
-            <stop offset="0" stopColor="#14264C" />
-            <stop offset="1" stopColor="#0B1834" />
+            <stop offset="0" style={{ stopColor: 'var(--map-land-a)' }} />
+            <stop offset="1" style={{ stopColor: 'var(--map-land-b)' }} />
           </radialGradient>
         </defs>
         {Array.from({ length: 8 }, (_, i) => (

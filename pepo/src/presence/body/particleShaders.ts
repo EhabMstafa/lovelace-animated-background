@@ -1,14 +1,9 @@
-import { fathiRig, helpers, palette } from '../glsl'
+import { helpers, palette } from '../glsl'
 
-/**
- * One particle buffer, two bodies, drawn in two passes: the Orb pass reads
- * `position`, the Avatar pass (FACE_PASS) reads `aFace`. Switching forms
- * cross-fades the passes; the face is never broken apart.
- */
+/** The Orb's particles: shell, inner depth and halo, all animated on the GPU. */
 export const bodyVertex = /* glsl */ `
   ${palette}
   ${helpers}
-  ${fathiRig}
 
   uniform float uTime;
   uniform float uRot;
@@ -25,15 +20,11 @@ export const bodyVertex = /* glsl */ `
   uniform float uSize;
   uniform float uPixelRatio;
   uniform mat3 uOrbTilt;
-  uniform float uFaceGain;
   uniform float uOpacity;
 
   attribute vec4 aSeed;
-  attribute float aKind;     // orb: 0 shell, 1 inner, 2 halo, 3 latent (hidden in the Orb)
+  attribute float aKind;     // 0 shell, 1 inner, 2 halo
   attribute vec3 aAxis;
-  attribute vec3 aFace;      // avatar position (FATHI units)
-  attribute float aFaceKind; // avatar: 0 cool line work … 1 warm (mask)
-  attribute float aFaceW;    // avatar: artwork weight
 
   varying vec3 vColor;
   varying float vAlpha;
@@ -42,9 +33,7 @@ export const bodyVertex = /* glsl */ `
   void orbBody(out vec4 mv, out vec3 color, out float alpha, out float size) {
     float shell = 1.0 - step(0.5, aKind);
     float inner = step(0.5, aKind) * (1.0 - step(1.5, aKind));
-    float halo  = step(1.5, aKind) * (1.0 - step(2.5, aKind));
-    float latent = step(2.5, aKind);
-    shell += latent;
+    float halo  = step(1.5, aKind);
     float t = uTime;
 
     vec3 p = position;
@@ -93,37 +82,16 @@ export const bodyVertex = /* glsl */ `
     alpha *= 1.0 + sparkle * 1.3;
     alpha *= 1.0 + speak * 0.7 * smoothstep(0.2, 1.0, wave);
     alpha *= 1.0 + uListen * (0.35 + 1.2 * uEnergy) * smoothstep(0.82, 1.0, ripple) * shell;
-    alpha *= 1.0 - latent;
-  }
-
-  // ── Avatar body: FATHI, exactly as its original renderer drew it ──
-  void faceBody(out vec4 mv, out vec3 color, out float alpha, out float size) {
-    vec3 bind = aFace;
-    float warm = aFaceKind;
-    vec3 p = rigPosition(bind, warm);
-    mv = modelViewMatrix * vec4(faceToWorld(p), 1.0);
-    vec2 finish = finishAt(bind, warm);
-    float lip = lipTrace(bind) * warm;
-    float speechGlow = (1.0 + uJaw * .06 * warm) * mix(uPresence.x, uPresence.y, warm);
-    alpha = aFaceW * (0.55 + 0.45 * fathiDepth(bind.z)) * 0.98 * uFaceGain * smoothstep(-1.96, -1.74, bind.y)
-          * finish.x * speechGlow * (1.0 + lip * (.65 + uJaw * .22)) * bodyShade(bind, normalMatrix);
-    color = avatarColor(finish.y, warm, lip, .42 + uJaw * .08);
-    // Points the volume brought forward would grow with perspective; keep FATHI's point size.
-    size = 0.62 * gNear;
   }
 
   void main() {
     vec4 mv;
     vec3 color;
     float alpha, size;
-  #ifdef FACE_PASS
-    faceBody(mv, color, alpha, size);
-  #else
     orbBody(mv, color, alpha, size);
-  #endif
     vAlpha = alpha * uGlow * uOpacity;
     if (vAlpha < 0.002) {
-      // Invisible (latent Orb particles, faded passes): skip rasterising.
+      // Invisible (faded out): skip rasterising.
       gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
       gl_PointSize = 0.0;
       return;
@@ -138,18 +106,9 @@ export const bodyFragment = /* glsl */ `
   varying vec3 vColor;
   varying float vAlpha;
   void main() {
-  #ifdef FACE_PASS
-    // FATHI's own point: a crisp disc with a hot centre.
-    vec2 c = gl_PointCoord - 0.5;
-    float r = dot(c, c);
-    if (r > 0.25) discard;
-    float f = 1.0 - r * 4.0;
-    gl_FragColor = vec4(vColor, vAlpha * (f * f * f + f * 0.18));
-  #else
     float d = length(gl_PointCoord - 0.5);
     float core = pow(smoothstep(0.5, 0.0, d), 2.0);
     if (core * vAlpha < 0.004) discard;
     gl_FragColor = vec4(vColor, core * vAlpha);
-  #endif
   }
 `

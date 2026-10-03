@@ -6,7 +6,7 @@ an event bus.
 
 **Status:** all three scenes of the prototype are in place:
 1. **Presence:** the Orb or FATHI, with the header toggle.
-2. **Conversation:** voice states and natural human motion.
+2. **Conversation:** voice states, played by each form in its own way.
 3. **Work:** a spatial workspace where PEPO steps aside, places tools and
    sends light to them.
 
@@ -15,7 +15,7 @@ cd pepo
 npm install
 npm run dev      # http://localhost:5173
 npm run build    # typecheck + production build into dist/
-npm test         # unit tests: workspace layout and store, human motion ranges
+npm test         # unit tests: workspace layout and store
 ```
 
 ## Trying it
@@ -31,6 +31,7 @@ npm test         # unit tests: workspace layout and store, human motion ranges
 | Press **Esc** (when not listening or typing) | Puts the work away; PEPO returns to the centre |
 | Press **1–7**, or use the state label in the corner | Jump straight to a presence state for review |
 | **Orb / Avatar** toggle in the header, or press **A** | Choose which body PEPO wears (remembered per browser); switching cross-fades between them |
+| Sun / moon button in the header, or press **T** | Dark or light theme (remembered per browser; follows the system until chosen) |
 | Move the pointer to the left edge | Reveal the navigation rail |
 
 When microphone access is granted, the Orb and the waveform react to your
@@ -46,19 +47,21 @@ src/
 │  ├─ events.ts                 UI intents: voiceStart, voiceStop, textSubmit, toolOpen…
 │  ├─ workspace.ts              workspace store: open, update, focus, close tools and their content
 │  ├─ status.ts                 status store the runtime reports to (shown on demand)
+│  ├─ theme.ts                  dark / light theme: saved choice, else the system's
 │  └─ tokens.ts                 colours, durations, easing
 ├─ presence/
-│  ├─ PresenceLayer.tsx         R3F canvas (demand frameloop, paced by FrameGovernor)
-│  ├─ PresenceBody.tsx          the body: Orb light layers + shared particles + Avatar traces
-│  ├─ body/particleShaders.ts   one particle system, two arrangements (Orb / Avatar) and the morph
+│  ├─ PresenceLayer.tsx         the Orb's R3F canvas (demand frameloop) and FATHI's canvas above it
+│  ├─ PresenceBody.tsx          the Orb: glass, streams, orbits, stars and particles
+│  ├─ body/particleShaders.ts   the Orb's particles
 │  ├─ orb/                      state language, geometry, glass/stream/orbit/star shaders
-│  ├─ avatar/
-│  │  ├─ assets/fathi.bin       the FATHI point-cloud artwork, baked (scripts/build-fathi.mjs)
-│  │  ├─ fathiHead.ts           decodes the asset (points, weights, mask flag, strands)
-│  │  ├─ humanMotion.ts         natural human motion: breath, blinks, gaze, head, brows, jaw, posture
-│  │  └─ shaders.ts             FATHI's strands (neck flow, throat, shoulder links, jaw guide)
+│  ├─ fathi/
+│  │  ├─ fathi-avatar.js        FATHI's original renderer and motion controller, unchanged
+│  │  ├─ fathi-*.bin, *.json    FATHI's original geometry (cloud, depth, contour, strands)
+│  │  ├─ three.*.min.js         the Three.js build FATHI ships with (MIT, see THIRD_PARTY_NOTICES)
+│  │  ├─ FathiAvatar.tsx        mounts FATHI and passes it PEPO's state, voice level and pointer
+│  │  └─ embeddedAssets.ts      serves the geometry files from the bundle
 │  ├─ lines.ts                  screen-space ribbon lines (constant pixel width, soft glow)
-│  └─ glsl.ts                   shared palette, helpers, FATHI's rig and the Avatar's colour
+│  └─ glsl.ts                   shared palette and helpers
 ├─ workspace/
 │  ├─ SpatialWorkspace.tsx      renders surfaces, moves PEPO aside, Esc to put work away
 │  ├─ layout.ts                 where PEPO and each surface go (desktop, tablet, phone sheet)
@@ -66,8 +69,8 @@ src/
 │  ├─ LightStreams.tsx          particles of light from PEPO to the surface it is working on
 │  └─ surfaces/                 Map (route drawing itself), Notes, Terminal, empty states
 ├─ voice/                       VoiceSurface, Waveform, Transcript, PresenceCaption, mic energy
-├─ chrome/                      GlobalHeader, PresenceToggle, StatusIndicator, NavigationRail, AdaptiveDock
-├─ background/                  AmbientBackground (night lake at ~5–10% intensity)
+├─ chrome/                      GlobalHeader, PresenceToggle, ThemeToggle, StatusIndicator, NavigationRail, AdaptiveDock
+├─ background/                  AmbientBackground (a lake at night, or at dawn in the light theme)
 └─ demo/                        DemoConductor + StatePicker (remove when the runtime connects)
 ```
 
@@ -163,94 +166,52 @@ transitions.
 
 ### Orb ↔ Avatar
 
-The Orb and the Avatar share one particle buffer, drawn in two passes.
-Switching forms is a calm 1.1 s cross-fade: the Orb fades away, then FATHI
-fades in whole. The face is never broken apart or dissolved into particles.
+The Avatar is FATHI, exactly as it came from the FATHI avatar export: its
+renderer, shaders, point cloud, depth, contour and strands, and its own
+motion controller (`src/presence/fathi/fathi-avatar.js`, unchanged; see
+`USAGE.txt` next to it). PEPO doesn't draw or animate FATHI itself. It
+mounts FATHI on its own canvas over the Orb and tells it three things:
+- **State:** idle and waiting → `idle`; listening → `listening`;
+  understanding and thinking → `thinking`; working → `tool-active`;
+  speaking → `speaking`.
+- **Voice level:** sent every 50 ms while speaking or listening. FATHI's
+  controller keeps the microphone from lighting the speech mask.
+- **Pointer:** where it is while it's over FATHI.
+
+FATHI is created the first time the Avatar is chosen and then kept alive,
+paused while hidden. Switching is a calm 1.1 s cross-fade: the Orb fades
+away as FATHI fades in. The Orb's canvas pauses while FATHI is shown. If
+FATHI can't start (no WebGL2, or an insecure context without Web Crypto),
+PEPO stays with the Orb.
 
 The form is the viewer's choice (`PresenceToggle`, or
-`presence.update({ form: 'avatar' | 'orb' })`). It never changes on its own,
-and each form plays every presence state in its own way:
+`presence.update({ form: 'avatar' | 'orb' })`). It never changes on its own.
 
-| State | Orb | Avatar |
-| --- | --- | --- |
-| listening | leans in, a ripple runs through, outer motes and orbits follow the voice | eyes settle on you, the head stills and leans in, sparse silent acknowledgements |
-| thinking | violet joins, interior particles travel, inner streams appear | stillness, eyes drift up and aside, a slow blink, maybe a small tilt |
-| speaking | light waves from the core to the surface, streams surge with speech | a breath first; the jaw follows the voice, head and eyes follow phrases |
+The geometry files are embedded in the bundle and served to FATHI's own
+requests for them (`embeddedAssets.ts`), so the renderer runs unchanged even
+from a single-file build.
 
-The Avatar is FATHI: the original point-cloud artwork at its full density
-(about 160,900 points with shallow depth, plus its neck, throat, shoulder
-and jaw strands), baked from the FATHI avatar export by
-`scripts/build-fathi.mjs`. It is drawn with fine points for a high-resolution
-line drawing; phones get an even 60,000-point subset. FATHI's rig is ported
-intact (jaw and mouth corners under the mask, blinks and squint, brows, chest
-breathing, head pose pivoting at the neck), plus two additions: the eyes
-follow the gaze, and the head and chest can lean forward.
+### Themes
 
-**Volume.** FATHI is drawn as a shallow relief (its depth is about a tenth
-of its width), so on its own it reads flat. The shader lays the same points
-onto a simple body: the head is an egg whose width follows FATHI's own
-silhouette, the neck a cylinder and the chest a shallow barrel with the
-shoulders falling back. The original relief stays on top as detail.
-Perspective is compensated, so the front view keeps FATHI's exact drawing.
-As the head turns, and with the small pointer parallax, the form shows its
-depth. A soft key light from above-left shades the turning planes.
-
-The appearance is exactly FATHI's original:
-- **Colors:** the same azure line work and radiant red-orange mask (the
-  original `#20dcff` and `#ff7b36` uniforms, in the same linear colour
-  space).
-- **Rendering:** the same lip line, ear and temple finish, depth falloff and
-  crisp point shape.
-
-#### Natural human motion
-
-`humanMotion.ts` aims for a calm person sitting in front of a webcam: 80%
-stillness and 20% meaningful movement.
-- **Independent clocks:** breath, blinks, gaze, head and posture, brows and
-  shoulders each run on their own irregular clock and are never
-  synchronised.
-- **No loops:** behaviour is chosen by weighted probabilities, so no sequence
-  repeats.
-- **Springs:** movement accelerates, overshoots a hair and settles.
-- **Breath:** every cycle is 3.5–6 s with its own depth, plus an occasional
-  deeper breath and a quick inhale before speaking.
-- **Blinks:** irregular 1–10 s intervals with occasional long gaps. They can
-  be partial, slow or (rarely) double, come before speech or after a thought,
-  and happen less often while listening.
-- **Gaze:** near the camera about 80% of the time, with micro-saccades and
-  glances. The eyes move first and the head follows 1–2° about 0.1–0.25 s
-  later. Gaze follows the pointer only while it moves.
-- **Head:** usually still, with irregular corrections of 0.3–3° and a rare
-  conversational turn while speaking.
-- **Listening:** the eyes settle on you, the head stills and leans in. Silent
-  acknowledgements stay sparse: a micro nod, an agreement nod, at most a
-  double nod, or a small tilt.
-- **Thinking:** stillness, then the eyes drift up and aside, a slow blink,
-  and maybe a small tilt or brow asymmetry.
-- **Pre-speech:** an inhale, a posture adjustment, the eyes return, maybe a
-  blink. The demo waits about half a second before the voice starts.
-- **Speaking:** the jaw follows the speech envelope; everything larger
-  follows phrases, detected from pauses in the audio:
-  - A phrase starts with a forward emphasis, a micro nod or a brow lift.
-  - A phrase ends with a blink, a settling nod, a glance or stillness.
-  - A long phrase may glance away and come back.
-  - The head never bobs with the waveform.
-- **Interruption:** the jaw releases within about 150 ms, the eyes find you,
-  there is a small head adjustment, and then the listening posture.
+Dark is the night lake. Light is the same lake at dawn, with daylight glass
+surfaces and ink-blue accents. Both themes use the same CSS variables
+(`:root` and `:root[data-theme='light']` in `index.css`). PEPO's body is made
+of light and needs darkness to be seen, so in the light theme it carries a
+soft deep-blue aura of its own. The choice is saved per browser. Until the
+viewer picks a theme, it follows the system.
 
 ### Credits
 
-The FATHI artwork, rig and motion controller come from the FATHI avatar
-export (`fathi-avatar.js` and its geometry files) and remain under that
-project's ownership.
+The FATHI artwork, renderer and motion controller come from the FATHI avatar
+export (`src/presence/fathi/`) and remain under that project's ownership.
+The vendored Three.js build keeps its MIT notice (`THIRD_PARTY_NOTICES.txt`).
 
 ### Performance
 
-- One draw call for all 160,900 body particles (60,000 on phones), with all motion computed on the GPU. Invisible particles skip rasterisation.
-- The Avatar asset is decoded just after the Orb's first frames.
-- Orb-only layers stop drawing while the Avatar is shown.
+- One draw call for the Orb's particles, with all motion computed on the GPU. Invisible particles skip rasterisation.
+- FATHI is loaded only when the Avatar is first chosen, and paces itself (its own 10–20 fps timer). The Orb's canvas pauses while FATHI is shown.
 - `frameloop="demand"` redraws at 30 fps in calm states and 60 fps in active ones. Nothing is drawn while the tab is hidden.
-- Fewer particles at phone widths. `prefers-reduced-motion` slows time and switches off parallax.
+- Fewer Orb particles at phone widths. `prefers-reduced-motion` slows time and switches off parallax; FATHI holds still.
 - The background is static apart from CSS-variable parallax.
 - While surfaces are open, PEPO renders at up to 1.5× resolution and at
   30 fps when calm.

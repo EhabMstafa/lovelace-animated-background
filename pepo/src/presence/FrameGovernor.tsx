@@ -10,6 +10,8 @@ export function FrameGovernor({ fps }: { fps: number }) {
   const invalidate = useThree((s) => s.invalidate)
 
   useEffect(() => {
+    // 0 pauses the canvas (nothing of it is on screen).
+    if (fps <= 0) return
     const interval = 1000 / fps
     let raf = 0
     let last = 0

@@ -23,23 +23,19 @@ export interface ParticleCounts {
   shell: number
   inner: number
   halo: number
-  /** Total particles, including latent ones that only appear in the Avatar. */
-  total: number
 }
 
-export const PARTICLE_KIND = { shell: 0, inner: 1, halo: 2, latent: 3 } as const
+export const PARTICLE_KIND = { shell: 0, inner: 1, halo: 2 } as const
 
 /**
- * One geometry, four populations distinguished by `aKind`:
+ * One geometry, three populations distinguished by `aKind`:
  *  - shell:  the sphere's skin, where most of the light lives
  *  - inner:  sparse depth particles, revealed while thinking
  *  - halo:   a few drifting motes outside, which react to the voice
- *  - latent: invisible in the Orb; they wake up to help draw the face
- * Avatar targets (`aFace`…) are filled in later by `assignFaceTargets`.
  */
 export function createOrbParticles(counts: ParticleCounts, seed = 7) {
   const rand = mulberry32(seed)
-  const total = Math.max(counts.total, counts.shell + counts.inner + counts.halo)
+  const total = counts.shell + counts.inner + counts.halo
   const position = new Float32Array(total * 3)
   const seeds = new Float32Array(total * 4)
   const kind = new Float32Array(total)
@@ -65,52 +61,14 @@ export function createOrbParticles(counts: ParticleCounts, seed = 7) {
   }
   for (let n = 0; n < counts.inner; n++) push(PARTICLE_KIND.inner, 0.12 + 0.8 * Math.pow(rand(), 0.7))
   for (let n = 0; n < counts.halo; n++) push(PARTICLE_KIND.halo, 1.12 + Math.pow(rand(), 2.2) * 0.95)
-  while (i < total) push(PARTICLE_KIND.latent, 0.3 + 0.7 * Math.pow(rand(), 0.4))
 
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.BufferAttribute(position, 3))
   geo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 4))
   geo.setAttribute('aKind', new THREE.BufferAttribute(kind, 1))
   geo.setAttribute('aAxis', new THREE.BufferAttribute(axis, 3))
-  geo.setAttribute('aFace', new THREE.BufferAttribute(new Float32Array(total * 3), 3))
-  geo.setAttribute('aFaceKind', new THREE.BufferAttribute(new Float32Array(total), 1))
-  geo.setAttribute('aFaceW', new THREE.BufferAttribute(new Float32Array(total), 1))
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 3)
   return geo
-}
-
-export interface FaceData {
-  position: Float32Array
-  weight: Float32Array
-  warm: Float32Array
-}
-
-/**
- * Pair every Orb particle with a point of the Avatar. Both sets are ordered
- * by height, so particles at the top of the Orb become the crown and those
- * at the bottom become the shoulders: the flow between forms reads as one
- * coherent movement instead of a shuffle.
- */
-export function assignFaceTargets(geo: THREE.BufferGeometry, face: FaceData) {
-  const orbPos = geo.getAttribute('position') as THREE.BufferAttribute
-  const seeds = geo.getAttribute('aSeed') as THREE.BufferAttribute
-  const n = orbPos.count
-  const m = face.weight.length
-  const orbOrder = Array.from({ length: n }, (_, i) => i).sort(
-    (a, b) => orbPos.getY(a) + seeds.getX(a) * 0.15 - (orbPos.getY(b) + seeds.getX(b) * 0.15),
-  )
-  const faceOrder = Array.from({ length: m }, (_, i) => i).sort((a, b) => face.position[a * 3 + 1] - face.position[b * 3 + 1])
-  const fp = geo.getAttribute('aFace') as THREE.BufferAttribute
-  const fk = geo.getAttribute('aFaceKind') as THREE.BufferAttribute
-  const fw = geo.getAttribute('aFaceW') as THREE.BufferAttribute
-  for (let r = 0; r < n; r++) {
-    const o = orbOrder[r]
-    const f = faceOrder[Math.min(m - 1, Math.floor((r / n) * m))]
-    fp.setXYZ(o, face.position[f * 3], face.position[f * 3 + 1], face.position[f * 3 + 2])
-    fk.setX(o, face.warm[f])
-    fw.setX(o, face.weight[f])
-  }
-  for (const a of [fp, fk, fw]) a.needsUpdate = true
 }
 
 /**

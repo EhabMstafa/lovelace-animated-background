@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { theme } from '../core/theme'
 import type { Rect } from './layout'
 
 export interface StreamTarget {
@@ -62,6 +63,10 @@ export function LightStreams({ origin, targets }: { origin: { x: number; y: numb
 
     const frame = (now: number) => {
       const { origin: o, targets: ts } = state.current
+      // Light on a dark page; ink-blue on a light one.
+      const light = theme.get() === 'light'
+      const head = light ? '18,112,184' : '220,245,255'
+      const trail = light ? '22,131,196' : '64,200,255'
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, el.width, el.height)
       let alive = false
@@ -82,7 +87,7 @@ export function LightStreams({ origin, targets }: { origin: { x: number; y: numb
           ctx.bezierCurveTo(c.c1.x, c.c1.y, c.c2.x, c.c2.y, c.p1.x, c.p1.y)
           const g = ctx.createLinearGradient(c.p0.x, c.p0.y, c.p1.x, c.p1.y)
           g.addColorStop(0, 'rgba(64,230,255,0.0)')
-          g.addColorStop(0.3, `rgba(64,200,255,${burst ? 0.18 : 0.1})`)
+          g.addColorStop(0.3, `rgba(${trail},${burst ? 0.18 : 0.1})`)
           g.addColorStop(1, `rgba(139,92,255,${burst ? 0.16 : 0.08})`)
           ctx.strokeStyle = g
           ctx.lineWidth = 1
@@ -105,7 +110,7 @@ export function LightStreams({ origin, targets }: { origin: { x: number; y: numb
           const fade = Math.sin(Math.PI * k) * (1 - s / 5)
           ctx.beginPath()
           ctx.arc(pt.x, pt.y + p.offset * Math.sin(Math.PI * e), s === 0 ? 1.7 : 1.1, 0, Math.PI * 2)
-          ctx.fillStyle = s === 0 ? `rgba(220,245,255,${0.9 * fade})` : `rgba(64,200,255,${0.45 * fade})`
+          ctx.fillStyle = s === 0 ? `rgba(${head},${0.9 * fade})` : `rgba(${trail},${0.45 * fade})`
           ctx.fill()
         }
       }

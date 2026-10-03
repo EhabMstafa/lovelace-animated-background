@@ -1,16 +1,46 @@
 import { useEffect, useRef } from 'react'
+import { useTheme, type Theme } from '../core/theme'
 import { mulberry32 } from '../presence/orb/geometry'
 import { ridge } from './ridges'
 
 /** Must match --horizon in index.css. */
 const HORIZON = { desktop: 0.66, mobile: 0.64 }
 
+/** The same lake at night (dark theme) and at dawn (light theme). */
+const PALETTE = {
+  dark: {
+    sky: ['#030812', '#071430', '#0D1B3D', '#16244A'],
+    stars: true,
+    dusk: ['rgba(110,80,170,0)', 'rgba(110,80,170,0.12)', 'rgba(214,140,120,0.22)', 'rgba(244,176,134,0.3)'],
+    far: { top: '#26386A', bottom: '#121F42', crest: 'rgba(190,205,255,0.16)' },
+    near: { top: '#111D3E', bottom: '#070F24', crest: 'rgba(150,180,255,0.08)' },
+    lake: ['#13204A', '#08112A', '#030812'],
+    reflection: 'rgba(20,32,70,0.9)',
+    ripple: (a: number) => `rgba(120,160,255,${a})`,
+    shore: true,
+    horizon: 'rgba(160,190,255,0.06)',
+  },
+  light: {
+    sky: ['#bccde6', '#d3dff0', '#e7edf6', '#f6eee8'],
+    stars: false,
+    dusk: ['rgba(255,214,190,0)', 'rgba(255,214,190,0.18)', 'rgba(255,196,160,0.3)', 'rgba(255,186,150,0.38)'],
+    far: { top: '#a7b9d5', bottom: '#bfcde2', crest: 'rgba(255,255,255,0.55)' },
+    near: { top: '#8197bb', bottom: '#9fb2d0', crest: 'rgba(255,255,255,0.35)' },
+    lake: ['#aebfdb', '#cbd7ea', '#e3eaf4'],
+    reflection: 'rgba(110,132,172,0.55)',
+    ripple: (a: number) => `rgba(255,255,255,${a * 5})`,
+    shore: false,
+    horizon: 'rgba(255,255,255,0.6)',
+  },
+}
+
 /**
- * The far depth plane: a night lake under a dusk horizon. It is painted
- * once per resize onto a canvas (nothing animates here except a slow
- * pointer parallax), and kept dim enough that PEPO always leads.
+ * The far depth plane: a lake under a dusk horizon (or at dawn, in the light
+ * theme). It is painted once per resize onto a canvas (nothing animates here
+ * except a slow pointer parallax), and kept quiet enough that PEPO always leads.
  */
-function paint(canvas: HTMLCanvasElement) {
+function paint(canvas: HTMLCanvasElement, theme: Theme) {
+  const P = PALETTE[theme]
   const dpr = Math.min(window.devicePixelRatio || 1, 2)
   const w = window.innerWidth
   const h = window.innerHeight
@@ -24,55 +54,57 @@ function paint(canvas: HTMLCanvasElement) {
 
   // Sky
   const sky = ctx.createLinearGradient(0, 0, 0, hy)
-  sky.addColorStop(0, '#030812')
-  sky.addColorStop(0.45, '#071430')
-  sky.addColorStop(0.85, '#0D1B3D')
-  sky.addColorStop(1, '#16244A')
+  sky.addColorStop(0, P.sky[0])
+  sky.addColorStop(0.45, P.sky[1])
+  sky.addColorStop(0.85, P.sky[2])
+  sky.addColorStop(1, P.sky[3])
   ctx.fillStyle = sky
   ctx.fillRect(0, 0, w, hy)
 
   // A faint band of the Milky Way across the upper right.
-  ctx.save()
-  ctx.translate(w * 0.78, h * 0.22)
-  ctx.rotate(-0.55)
-  const band = ctx.createRadialGradient(0, 0, 0, 0, 0, w * 0.32)
-  band.addColorStop(0, 'rgba(120,140,220,0.07)')
-  band.addColorStop(1, 'rgba(120,140,220,0)')
-  ctx.scale(1, 0.28)
-  ctx.fillStyle = band
-  ctx.beginPath()
-  ctx.arc(0, 0, w * 0.32, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.restore()
-
-  // Stars: sparse everywhere, denser inside the band.
-  const star = (x: number, y: number, r: number, a: number, violet: boolean) => {
+  if (P.stars) {
+    ctx.save()
+    ctx.translate(w * 0.78, h * 0.22)
+    ctx.rotate(-0.55)
+    const band = ctx.createRadialGradient(0, 0, 0, 0, 0, w * 0.32)
+    band.addColorStop(0, 'rgba(120,140,220,0.07)')
+    band.addColorStop(1, 'rgba(120,140,220,0)')
+    ctx.scale(1, 0.28)
+    ctx.fillStyle = band
     ctx.beginPath()
-    ctx.arc(x, y, r, 0, Math.PI * 2)
-    ctx.fillStyle = violet ? `rgba(180,165,255,${a})` : `rgba(205,225,255,${a})`
+    ctx.arc(0, 0, w * 0.32, 0, Math.PI * 2)
     ctx.fill()
-  }
-  const count = Math.round((w * h) / 7000)
-  for (let i = 0; i < count; i++) {
-    const y = Math.pow(rand(), 1.4) * hy * 0.92
-    const r = rand() < 0.95 ? 0.3 + rand() * 0.5 : 0.9 + rand() * 0.6
-    star(rand() * w, y, r, (0.1 + rand() * 0.45) * (1 - y / (hy * 1.1)), rand() < 0.2)
-  }
-  for (let i = 0; i < count * 0.8; i++) {
-    const t = (rand() - 0.5) * 2
-    const off = (rand() + rand() + rand() - 1.5) * 0.05
-    const x = w * (0.78 + t * 0.3 * Math.cos(-0.55) - off * Math.sin(-0.55))
-    const y = h * 0.22 + w * (t * 0.3 * Math.sin(-0.55) + off * Math.cos(-0.55))
-    if (y < 0 || y > hy * 0.8) continue
-    star(x, y, 0.25 + rand() * 0.4, 0.08 + rand() * 0.22, rand() < 0.3)
+    ctx.restore()
+
+    // Stars: sparse everywhere, denser inside the band.
+    const star = (x: number, y: number, r: number, a: number, violet: boolean) => {
+      ctx.beginPath()
+      ctx.arc(x, y, r, 0, Math.PI * 2)
+      ctx.fillStyle = violet ? `rgba(180,165,255,${a})` : `rgba(205,225,255,${a})`
+      ctx.fill()
+    }
+    const count = Math.round((w * h) / 7000)
+    for (let i = 0; i < count; i++) {
+      const y = Math.pow(rand(), 1.4) * hy * 0.92
+      const r = rand() < 0.95 ? 0.3 + rand() * 0.5 : 0.9 + rand() * 0.6
+      star(rand() * w, y, r, (0.1 + rand() * 0.45) * (1 - y / (hy * 1.1)), rand() < 0.2)
+    }
+    for (let i = 0; i < count * 0.8; i++) {
+      const t = (rand() - 0.5) * 2
+      const off = (rand() + rand() + rand() - 1.5) * 0.05
+      const x = w * (0.78 + t * 0.3 * Math.cos(-0.55) - off * Math.sin(-0.55))
+      const y = h * 0.22 + w * (t * 0.3 * Math.sin(-0.55) + off * Math.cos(-0.55))
+      if (y < 0 || y > hy * 0.8) continue
+      star(x, y, 0.25 + rand() * 0.4, 0.08 + rand() * 0.22, rand() < 0.3)
+    }
   }
 
   // Dusk: a thin warm band at the horizon under a violet veil. Human warmth, held low.
   const dusk = ctx.createLinearGradient(0, hy - h * 0.2, 0, hy)
-  dusk.addColorStop(0, 'rgba(110,80,170,0)')
-  dusk.addColorStop(0.55, 'rgba(110,80,170,0.12)')
-  dusk.addColorStop(0.88, 'rgba(214,140,120,0.22)')
-  dusk.addColorStop(1, 'rgba(244,176,134,0.3)')
+  dusk.addColorStop(0, P.dusk[0])
+  dusk.addColorStop(0.55, P.dusk[1])
+  dusk.addColorStop(0.88, P.dusk[2])
+  dusk.addColorStop(1, P.dusk[3])
   ctx.fillStyle = dusk
   ctx.fillRect(0, hy - h * 0.2, w, h * 0.2)
 
@@ -83,8 +115,8 @@ function paint(canvas: HTMLCanvasElement) {
   const crop = (span - w) / 2
   const mh = Math.min(h, span * 0.62)
   const layers = [
-    { seed: 3, height: mh * 0.2, rough: 0.8, valley: 1.2, top: '#26386A', bottom: '#121F42', crest: 'rgba(190,205,255,0.16)' },
-    { seed: 9, height: mh * 0.27, rough: 1, valley: 1.5, top: '#111D3E', bottom: '#070F24', crest: 'rgba(150,180,255,0.08)' },
+    { seed: 3, height: mh * 0.2, rough: 0.8, valley: 1.2, ...P.far },
+    { seed: 9, height: mh * 0.27, rough: 1, valley: 1.5, ...P.near },
   ]
   const silhouettes: Float32Array[] = []
   for (const L of layers) {
@@ -112,9 +144,9 @@ function paint(canvas: HTMLCanvasElement) {
 
   // Lake
   const lake = ctx.createLinearGradient(0, hy, 0, h)
-  lake.addColorStop(0, '#13204A')
-  lake.addColorStop(0.35, '#08112A')
-  lake.addColorStop(1, '#030812')
+  lake.addColorStop(0, P.lake[0])
+  lake.addColorStop(0.35, P.lake[1])
+  lake.addColorStop(1, P.lake[2])
   ctx.fillStyle = lake
   ctx.fillRect(0, hy, w, h - hy)
 
@@ -130,7 +162,7 @@ function paint(canvas: HTMLCanvasElement) {
   ctx.lineTo(w, hy)
   ctx.closePath()
   const refl = ctx.createLinearGradient(0, hy, 0, hy + L.height * 0.8)
-  refl.addColorStop(0, 'rgba(20,32,70,0.9)')
+  refl.addColorStop(0, P.reflection)
   refl.addColorStop(1, 'rgba(20,32,70,0)')
   ctx.fillStyle = refl
   ctx.fill()
@@ -141,12 +173,12 @@ function paint(canvas: HTMLCanvasElement) {
     const y = hy + Math.pow(rand(), 1.8) * (h - hy)
     const len = 20 + rand() * 120
     const x = rand() * w
-    ctx.fillStyle = `rgba(120,160,255,${0.02 + rand() * 0.04})`
+    ctx.fillStyle = P.ripple(0.02 + rand() * 0.04)
     ctx.fillRect(x, y, len, 1)
   }
 
-  // A few warm lights along the shore.
-  for (let i = 0; i < 12; i++) {
+  // A few warm lights along the shore (at night).
+  for (let i = 0; i < (P.shore ? 12 : 0); i++) {
     const side = i % 2 ? 1 : -1
     const x = w * (0.5 + side * (0.2 + rand() * 0.28))
     const y = hy - 0.5 - rand() * 1.5
@@ -163,12 +195,13 @@ function paint(canvas: HTMLCanvasElement) {
   }
 
   // Horizon line where sky meets water.
-  ctx.fillStyle = 'rgba(160,190,255,0.06)'
+  ctx.fillStyle = P.horizon
   ctx.fillRect(0, hy, w, 1)
 }
 
 export function AmbientBackground() {
   const canvas = useRef<HTMLCanvasElement>(null)
+  const current = useTheme()
 
   useEffect(() => {
     const el = canvas.current
@@ -176,15 +209,15 @@ export function AmbientBackground() {
     let raf = 0
     const draw = () => {
       cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => paint(el))
+      raf = requestAnimationFrame(() => paint(el, current))
     }
-    paint(el)
+    paint(el, current)
     window.addEventListener('resize', draw)
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', draw)
     }
-  }, [])
+  }, [current])
 
   return (
     <div className="ambient" aria-hidden="true">

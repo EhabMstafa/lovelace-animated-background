@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { PresenceToggle } from './PresenceToggle'
 import { StatusIndicator } from './StatusIndicator'
+import { ThemeToggle } from './ThemeToggle'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -38,6 +39,7 @@ export function GlobalHeader({ userInitial = 'E' }: GlobalHeaderProps) {
 
       <div className="flex items-center gap-5 text-[12px] text-[var(--text-secondary)]">
         <PresenceToggle />
+        <ThemeToggle />
         <StatusIndicator />
         <time className="tabular-nums hidden sm:inline" dateTime={now.toISOString()}>
           {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
