@@ -48,8 +48,8 @@
   color-scheme: dark;
 }
 
-/* Light: daylight glass over a dawn lake. PEPO keeps a dusk aura of its own,
-   because its body is made of light and needs darkness to be seen. */
+/* Light: daylight glass over a dawn lake. PEPO's body is inverted into ink
+   (see "Light theme" under the presence stage). */
 :root[data-theme='light'] {
   --space-0: #eef3f9;
   --space-1: #e6edf6;
@@ -198,14 +198,32 @@ button:focus-visible, input:focus-visible { outline: 1px solid rgb(var(--accent-
   transition: opacity 1.1s var(--ease-out);
 }
 .fathi-avatar.is-visible { opacity: 1; }
-/* Light theme: PEPO's body is light, so it carries a dusk aura of its own. */
-:root[data-theme='light'] .presence-stage::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(12, 30, 72, 0.94) 0%, rgba(14, 36, 84, 0.88) 42%, rgba(26, 58, 116, 0.6) 64%, rgba(60, 96, 160, 0.24) 84%, rgba(90, 125, 185, 0) 100%);
+/* Light theme: PEPO's body is drawn in light, which vanishes on a pale sky.
+   Inverting it (and turning the hue back round) keeps every colour family
+   but turns light-on-dark into ink-on-paper: deep cyan line work, a burnt
+   orange mask, a pale glass Orb. */
+:root[data-theme='light'] .presence-stage canvas,
+:root[data-theme='light'] .fathi-avatar {
+  filter: invert(1) hue-rotate(180deg) saturate(1.15);
 }
+/* What was white light would invert to black: lift the darkest ink to a deep
+   navy. "Lighten" leaves everything brighter than the navy (the sky, the
+   coloured line work) untouched. */
+.presence-ink {
+  display: none;
+  position: absolute;
+  z-index: 2;
+  left: var(--presence-x, 50%);
+  top: var(--presence-y, var(--orb-y));
+  width: var(--stage);
+  height: var(--stage);
+  transform: translate(-50%, -50%) scale(var(--presence-scale, 1));
+  transition: left 1.1s var(--ease-out), top 1.1s var(--ease-out), transform 1.1s var(--ease-out);
+  background: #0e2a5c;
+  mix-blend-mode: lighten;
+  pointer-events: none;
+}
+:root[data-theme='light'] .presence-ink { display: block; }
 
 /* ───────── theme toggle ───────── */
 .theme-toggle {
@@ -760,7 +778,7 @@ body { transition: background-color 0.4s var(--ease-out), color 0.4s var(--ease-
 :root[data-workspace='sheet'] .caption { opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {
-  .presence-stage, .fathi-stage, .ambient-orb-reflection { transition: none; }
+  .presence-stage, .fathi-stage, .presence-ink, .ambient-orb-reflection { transition: none; }
 }
 
 /* With PEPO stepped aside, its words stay with it, under the presence. */

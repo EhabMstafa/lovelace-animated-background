@@ -87,6 +87,7 @@ export function PresenceLayer({ compact = false }: { compact?: boolean }) {
         <FathiAvatar visible={form === 'avatar'} state={state} reducedMotion={reducedMotion} onReady={setFathiReady} />
       </ErrorBoundary>
     </div>
+    <div className="presence-ink" aria-hidden="true" />
     </>
   )
 }

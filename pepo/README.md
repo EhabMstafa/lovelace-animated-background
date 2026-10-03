@@ -195,9 +195,12 @@ from a single-file build.
 
 Dark is the night lake. Light is the same lake at dawn, with daylight glass
 surfaces and ink-blue accents. Both themes use the same CSS variables
-(`:root` and `:root[data-theme='light']` in `index.css`). PEPO's body is made
-of light and needs darkness to be seen, so in the light theme it carries a
-soft deep-blue aura of its own. The choice is saved per browser. Until the
+(`:root` and `:root[data-theme='light']` in `index.css`). PEPO's body is drawn
+in light, which would vanish on a pale sky, so in the light theme the Orb and
+FATHI are inverted with the hue turned back round: light-on-dark becomes
+ink-on-paper with the same colour families (deep cyan line work, a burnt
+orange mask, a pale glass Orb). What was white would turn black, so a
+"lighten" layer lifts the darkest ink to deep navy. The choice is saved per browser. Until the
 viewer picks a theme, it follows the system.
 
 ### Credits
