@@ -212,6 +212,11 @@ const RIG_GLSL=`
     float d=min(abs(p.y-upperY),abs(p.y-lowerY));
     return (1.0-smoothstep(.012,.036,d))*(1.0-smoothstep(.27,.35,ax));
   }
+  // PEPO: the pupil cluster of the artwork (see rigPosition).
+  float pupilMask(vec3 bind,float warm){
+    vec2 pq=vec2(abs(bind.x)-.362,bind.y+.019);
+    return (1.0-smoothstep(.026,.032,abs(pq.x)))*(1.0-smoothstep(.017,.021,abs(pq.y)))*(1.0-warm);
+  }
   vec3 rigPosition(vec3 p,float warm){
     vec3 bind=p; // Region weights stay attached to the undeformed artwork.
     // The approved mask drawing becomes a shallow expressive mouth surface.
@@ -259,10 +264,9 @@ const RIG_GLSL=`
     // PEPO: the artwork's pupils sit low and outward, on the lower lid (the
     // source-image iris estimate). Lift them into the open eye, let them follow
     // the gaze, and let the lids cover them in a blink. Lids and socket stay put.
-    vec2 pq=vec2(abs(bind.x)-.362,bind.y+.019);
-    float pupil=(1.0-smoothstep(.026,.032,abs(pq.x)))*(1.0-smoothstep(.017,.021,abs(pq.y)))*(1.0-warm);
-    p.x-=sign(bind.x)*.062*pupil;
-    p.y+=(.030-uBlink*.032)*pupil;
+    float pupil=pupilMask(bind,warm);
+    p.x-=sign(bind.x)*.077*pupil;
+    p.y+=(.045-uBlink*.047)*pupil;
     p.x+=uGaze.x*.030*pupil;p.y+=uGaze.y*.012*pupil;
     float head=smoothstep(-1.35,-.48,bind.y);
     float torso=1.0-smoothstep(-1.30,-.78,p.y);
@@ -468,6 +472,7 @@ export async function createFathiAvatar(canvas, opts={}){
         float speechGlow=(1.0+uJaw*.06*aWarm)*mix(uPresence.x,uPresence.y,aWarm);
         vA=lum*uPointGain*edge*smoothstep(-1.96,-1.74,position.y)*finish.x*speechGlow
           *(1.0+lip*(.65+uJaw*.22));
+        vA*=1.0-.55*pupilMask(position,aWarm); // PEPO: softer pupils
         vCol=mix(mix(uCyan,uAmber,finish.y),vec3(1.0,.50,.30),lip*(.42+uJaw*.08));
         vCol=mix(vCol,vec3(1.0,.53,.29),uPresence.z*.22*(1.0-aWarm));
         gl_PointSize=clamp(uSize*uProj/-mv.z,1.0,uMaxPx);

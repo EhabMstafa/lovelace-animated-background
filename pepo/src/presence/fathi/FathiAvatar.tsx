@@ -201,5 +201,38 @@ export function FathiAvatar({ visible, preload, state, reducedMotion, compact, o
     }
   }, [ready])
 
+  // The waterline: where the horizon crosses the canvas. The bust fades out
+  // as it reaches the lake instead of being cut by the horizon (and nothing
+  // spills into the water). Followed through PEPO's moves.
+  useEffect(() => {
+    const el = canvas.current
+    const stage = el?.parentElement
+    if (!el || !stage) return
+    let raf = 0
+    let until = 0
+    const measure = () => {
+      const top = el.getBoundingClientRect().top
+      const k = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--horizon')) / 100 || 0.66
+      el.style.setProperty('--waterline', `${Math.round(window.innerHeight * k - top)}px`)
+    }
+    const follow = () => {
+      measure()
+      if (performance.now() < until) raf = requestAnimationFrame(follow)
+    }
+    const moving = () => {
+      until = performance.now() + 1000
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(follow)
+    }
+    measure()
+    stage.addEventListener('transitionrun', moving)
+    window.addEventListener('resize', moving)
+    return () => {
+      cancelAnimationFrame(raf)
+      stage.removeEventListener('transitionrun', moving)
+      window.removeEventListener('resize', moving)
+    }
+  }, [])
+
   return <canvas ref={canvas} className={`fathi-avatar ${visible && ready ? 'is-visible' : ''}`} />
 }

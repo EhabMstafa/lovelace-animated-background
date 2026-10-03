@@ -254,8 +254,11 @@ point cloud, depth, contour, strands and per-state lighting
 that file are three small changes, each marked "PEPO": a motion controller
 can be passed in (without one, FATHI uses its own); the pupils, which the
 artwork draws low and outward on the lower lid, are lifted into the open eye
-and follow the gaze (lids and socket stay put, a blink covers them); and it redraws at 30 fps instead of
-20 while something moves (10 fps at rest, as before). The geometry files are embedded in the
+and follow the gaze, a little softer than the line work (lids and socket
+stay put, a blink covers them); and it redraws at 30 fps instead of
+20 while something moves (10 fps at rest, as before). Where the bust meets the lake it fades out over
+the last few pixels above the horizon, so it settles into the water instead
+of being cut by it. The geometry files are embedded in the
 bundle and served to FATHI's own requests (`embeddedAssets.ts`), so the
 renderer runs unchanged even from a single-file build.
 

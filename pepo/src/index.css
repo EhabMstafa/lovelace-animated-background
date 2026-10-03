@@ -215,6 +215,13 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
   transition: opacity 0.18s var(--ease-in-out);
 }
 .fathi-avatar.is-visible { opacity: 1; transition: opacity 0.22s var(--ease-out) 0.13s; }
+/* The bust settles into the lake: it fades over the last few pixels above the
+   horizon and nothing of it shows on the water. */
+.fathi-avatar {
+  --waterline: 200%;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(var(--waterline) - 44px), rgb(0 0 0 / 0.45) calc(var(--waterline) - 12px), transparent var(--waterline));
+  mask-image: linear-gradient(to bottom, #000 calc(var(--waterline) - 44px), rgb(0 0 0 / 0.45) calc(var(--waterline) - 12px), transparent var(--waterline));
+}
 /* PEPO keeps its own colours in both themes. On the light theme only
    contrast and saturation adapt (theme tokens), so the same cyan and orange
    line work stays readable on a pale sky. */
