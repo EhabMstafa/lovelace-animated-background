@@ -1,4 +1,4 @@
-import { faceLight, facePose, helpers, palette } from '../glsl'
+import { fathiRig, helpers, palette } from '../glsl'
 
 /**
  * One particle system, two bodies. Every particle knows where it lives in
@@ -9,14 +9,13 @@ import { faceLight, facePose, helpers, palette } from '../glsl'
 export const bodyVertex = /* glsl */ `
   ${palette}
   ${helpers}
-  ${facePose}
-  ${faceLight}
+  ${fathiRig}
 
   uniform float uTime;
   uniform float uRot;
   uniform float uFlow;
   uniform float uScale;
-  uniform float uBreath;
+  uniform float uOrbBreath;
   uniform float uConverge;
   uniform float uDepth;
   uniform float uViolet;
@@ -28,15 +27,13 @@ export const bodyVertex = /* glsl */ `
   uniform float uPixelRatio;
   uniform float uMorph;
   uniform mat3 uOrbTilt;
-  uniform vec2 uGaze;
 
   attribute vec4 aSeed;
   attribute float aKind;     // orb: 0 shell, 1 inner, 2 halo, 3 latent (hidden in the Orb)
   attribute vec3 aAxis;
-  attribute vec3 aFace;
-  attribute vec3 aFaceN;
-  attribute float aFaceKind; // avatar: 0 skin, 1 mask, 2 feature, 3 strand, 4 dust
-  attribute float aFaceW;
+  attribute vec3 aFace;      // avatar position (FATHI units)
+  attribute float aFaceKind; // avatar: 0 cool line work … 1 warm (mask)
+  attribute float aFaceW;    // avatar: artwork weight
 
   varying vec3 vColor;
   varying float vAlpha;
@@ -61,7 +58,7 @@ export const bodyVertex = /* glsl */ `
     float r = length(p);
     vec3 dir = p / max(r, 1e-4);
     float breath = sin(t * 6.2831 / 6.0);
-    r *= 1.0 + uBreath * breath * (shell + 0.6 * inner + 1.5 * halo);
+    r *= 1.0 + uOrbBreath * breath * (shell + 0.6 * inner + 1.5 * halo);
     r *= 1.0 - uConverge * (shell + 0.4 * inner + 2.6 * halo);
     float ripple = sin(dir.y * 8.0 - t * 2.6 + dir.x * 1.5);
     r += uListen * uEnergy * (halo * (0.10 + 0.07 * ripple) + shell * 0.022 * ripple);
@@ -99,89 +96,21 @@ export const bodyVertex = /* glsl */ `
     alpha *= 1.0 - latent;
   }
 
-  // ── Avatar body ───────────────────────────────────────────
+  // ── Avatar body: FATHI ─────────────────────────────────────
   void faceBody(out vec4 mv, out vec3 color, out float alpha, out float size) {
-    float t = uTime;
-    float skin = 1.0 - step(0.5, aFaceKind);
-    float mask = step(0.5, aFaceKind) * (1.0 - step(1.5, aFaceKind));
-    float feature = step(1.5, aFaceKind) * (1.0 - step(2.5, aFaceKind));
-    float strand = step(2.5, aFaceKind) * (1.0 - step(3.5, aFaceKind));
-    float dust = step(3.5, aFaceKind);
+    vec3 bind = aFace;
+    float warm = aFaceKind;
+    vec3 p = rigPosition(bind, warm);
+    mv = modelViewMatrix * vec4(faceToWorld(p), 1.0);
 
-    vec3 f = aFace;
-    vec3 n = aFaceN;
-
-    // Microscopic drift keeps the cloud alive without blurring the form.
-    f += sin(vec3(0.31, 0.23, 0.27) * t + aSeed.xyz * 6.2831) * (0.0018 + dust * 0.02);
-
-    // Dust leaves the silhouette and fades, then quietly returns.
-    float life = fract(t * (0.035 + 0.03 * aSeed.y) + aSeed.x);
-    f += n * dust * life * 0.12;
-
-    // Listening: sound arrives at the ears and ripples inward across the face.
-    float ear = gauss(length(vec2(abs(f.x) - 0.45, f.y + 0.2)), 0.16);
-    float inward = 0.5 + 0.5 * sin((0.5 - abs(f.x)) * 34.0 + t * 7.0);
-    float hear = uListen * uEnergy * smoothstep(0.05, 0.4, abs(f.x)) * step(-0.75, f.y);
-    f += n * (ear * 0.035 + inward * 0.008) * hear;
-
-    // Speaking: energy flows down the mask and the jaw beneath it moves
-    // softly with the voice. Never lip sync.
-    float mw = 0.5 + 0.5 * sin(f.y * 26.0 + t * 6.5);
-    float voice = uSpeak * uEnergy;
-    float jaw = mask * smoothstep(-0.36, -0.6, f.y);
-    f += n * mask * voice * 0.012 * mw;
-    f.y -= jaw * voice * 0.016;
-    f.z += jaw * voice * 0.006;
-
-    // Eye attention.
-    float eye = gauss(length(vec2(abs(f.x) - 0.17, f.y + 0.05)), 0.05) * step(0.4, f.z);
-    f.xy += uGaze * eye * 0.006;
-
-    vec3 base = f;
-    vec3 p = poseFace(f, n);
-    mv = modelViewMatrix * vec4(p, 1.0);
-    vec3 vn = normalize(normalMatrix * n);
-    vec4 light = faceLighting(vn);
-    float diffuse = light.x, fres = light.y, rim = light.z, front = light.w;
-
-    float sparkle = step(0.993, aSeed.w) * strand * step(-1.05, aFace.y);
-    size = skin * (0.85 + 0.5 * aSeed.y) + mask * (0.85 + 0.4 * aSeed.y) + feature * 1.0
-         + strand * (0.85 + 0.45 * aSeed.y) + dust * (0.6 + 0.5 * aSeed.y);
-    size *= 1.0 + sparkle * 1.6;
-
-    // Colour: lit sculpture in PEPO's palette.
-    vec3 skinCol = mix(C_DEEP * 0.55, C_SKY, smoothstep(0.05, 0.85, diffuse));
-    skinCol += C_WHITE * pow(diffuse, 7.0) * 0.45;
-    vec3 maskCol = mix(mix(C_DEEP, C_LILAC, 0.35) * 0.6, mix(C_LILAC, C_WHITE, 0.35), smoothstep(0.05, 0.9, diffuse));
-    vec3 strandCol = mix(C_SKY, C_DEEP, smoothstep(-0.7, -1.35, base.y));
-    color = skin * skinCol + mask * mix(maskCol, C_WHITE, aFaceW * 0.2) + feature * mix(skinCol, C_WHITE, 0.3)
-          + strand * strandCol + dust * C_BLUE;
-    color += C_CYAN * fres * 0.55 * (skin + strand);
-    color += C_LILAC * rim * 0.75 * (skin + mask + strand);
-    color = mix(color, C_VIOLET, uViolet * 0.3 * (skin + dust));
-    color = mix(color, C_WHITE, sparkle * 0.6);
-
-    float lit = 0.06 + 1.1 * pow(diffuse, 1.3) + 0.7 * fres + 0.8 * rim;
-    alpha = skin * lit * (0.45 + 0.35 * aFaceW)
-          + mask * (0.12 + 1.0 * diffuse + 0.5 * rim) * (0.6 + 0.35 * aFaceW)
-          + feature * (0.22 + 0.4 * diffuse)
-          + strand * (0.25 + 0.7 * diffuse + 0.5 * fres)
-          + dust * 0.22 * (1.0 - life) * step(-0.85, base.y);
-
-    // Thinking: the silhouette thins, the forehead and eyes gather light.
-    float mind = gauss(length(vec2(base.x * 0.7, base.y - 0.1)), 0.24) * step(0.2, base.z);
-    alpha *= 1.0 + uDepth * 0.9 * mind;
-    alpha *= 1.0 - uDepth * 0.4 * fres * skin;
-    // Listening and speaking brighten where the response lives.
-    alpha *= 1.0 + ear * uListen * (0.3 + uEnergy) + hear * inward * 0.9;
-    alpha *= 1.0 + mask * voice * 0.9 * mw;
-    alpha *= 1.0 + strand * voice * 0.6 * (0.5 + 0.5 * sin(base.y * 18.0 + t * 6.0));
-    color = mix(color, C_CYAN, hear * inward * 0.5);
-
-    alpha *= mix(0.12, 1.0, front);
-    alpha *= smoothstep(-1.38, -1.02, base.y) * (1.0 - smoothstep(0.7, 1.05, abs(base.x)));
-    alpha *= 0.85 + 0.15 * sin(t * (0.7 + aSeed.z) + aSeed.x * 30.0);
-    alpha *= 1.0 + sparkle * 1.2;
+    float depth = smoothstep(-0.3, 0.45, bind.z);
+    vec2 finish = finishAt(bind, warm);
+    float lip = lipTrace(bind) * warm;
+    float speechGlow = (1.0 + uJaw * .06 * warm) * mix(uPresence.x, uPresence.y, warm);
+    alpha = aFaceW * (0.55 + 0.45 * depth) * 0.96 * smoothstep(-1.96, -1.74, bind.y)
+          * finish.x * speechGlow * (1.0 + lip * (.65 + uJaw * .22));
+    color = avatarColor(bind, finish.y, lip);
+    size = 0.8 + 0.3 * aSeed.y;
   }
 
   void main() {
@@ -218,7 +147,7 @@ export const bodyVertex = /* glsl */ `
 
       color = mix(cOrb, cFace, e);
       alpha = mix(alphaOrb, alphaFace, e) * (1.0 + mid * 0.5);
-      size = mix(sizeOrb, sizeFace * 0.85, e);
+      size = mix(sizeOrb, sizeFace, e);
     }
 
     gl_Position = projectionMatrix * mv;

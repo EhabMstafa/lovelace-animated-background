@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { presence, type PresenceForm, type PresenceState } from '../core/presence'
-import { getPointer } from '../hooks/usePointer'
+import { getPointer, pointerActive } from '../hooks/usePointer'
+import { createFathiMotion, presenceLight, type FathiState } from './avatar/fathiMotion'
 import { traceFragment, traceVertex } from './avatar/shaders'
 import { useHeadCloud } from './avatar/useHeadCloud'
 import { bodyFragment, bodyVertex } from './body/particleShaders'
@@ -50,6 +51,17 @@ const RADIUS = 1
 const GLOW_SIZE = 4.6
 const TILT = new THREE.Euler(0.18, 0, -0.12)
 const MORPH_SECONDS = 1.55
+
+/** PEPO's presence states, in the vocabulary of FATHI's motion controller. */
+const FATHI_STATE: Record<PresenceState, FathiState> = {
+  idle: 'idle',
+  waiting: 'idle',
+  listening: 'listening',
+  understanding: 'thinking',
+  thinking: 'thinking',
+  speaking: 'speaking',
+  working: 'tool',
+}
 export const CAMERA_Z = 8.2
 
 interface PresenceBodyProps {
@@ -81,14 +93,15 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
   const pixelRatio = gl.getPixelRatio()
 
   const params = useRef<OrbParams>({ ...ORB_STATES.idle })
-  const clock = useRef({ t: 0, rot: 0, flow: 0, energy: 0, morph: 0, yaw: 0, pitch: 0, gx: 0, gy: 0, gazeAt: 0, gtx: 0, gty: 0 })
+  const clock = useRef({ t: 0, rot: 0, flow: 0, energy: 0, morph: 0 })
+  const motion = useMemo(() => createFathiMotion(), [])
 
   const cloud = useHeadCloud(counts.total)
 
   // ── Geometry ──
   const particleGeo = useMemo(() => createOrbParticles(counts), [counts])
-  const streamGeo = useMemo(() => createRibbonGeometry(createStreams(4, 4, 11, 0.88, 0.985)), [])
-  const innerStreamGeo = useMemo(() => createRibbonGeometry(createStreams(3, 3, 23, 0.45, 0.7, 80)), [])
+  const streamGeo = useMemo(() => createRibbonGeometry(createStreams(3, 5, 11, 0.88, 0.98)), [])
+  const innerStreamGeo = useMemo(() => createRibbonGeometry(createStreams(2, 4, 23, 0.5, 0.7, 90)), [])
   const orbitGeos = useMemo(() => ORBITS.map((o) => createRibbonGeometry([ellipsePoints(o.r[0], o.r[1])], true)), [])
   const starGeo = useMemo(() => createStarNodes(9, 5), [])
   const nodeGeo = useMemo(() => {
@@ -103,9 +116,9 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     if (!cloud) return null
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.BufferAttribute(cloud.traceSegments, 3))
-    g.setAttribute('aT', new THREE.BufferAttribute(cloud.traceT, 1))
-    g.setAttribute('aKind', new THREE.BufferAttribute(cloud.traceKind, 1))
-    g.setAttribute('aNormal', new THREE.BufferAttribute(cloud.traceNormal, 3))
+    g.setAttribute('aStrength', new THREE.BufferAttribute(cloud.traceStrength, 1))
+    g.setAttribute('aProgress', new THREE.BufferAttribute(cloud.traceProgress, 1))
+    g.setAttribute('aWarm', new THREE.BufferAttribute(cloud.traceWarm, 1))
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 3)
     return g
   }, [cloud])
@@ -120,11 +133,19 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     resolution.set(size.width * pixelRatio, size.height * pixelRatio)
   }, [size, pixelRatio, resolution])
 
+  /** FATHI rig uniforms, shared by the particles and the strands. */
   const pose = useMemo(
     () => ({
-      uPose: { value: new THREE.Vector3() },
-      uFaceScale: { value: 1.45 },
-      uFaceOffset: { value: new THREE.Vector3(0, -0.32, 0.05) },
+      uHead: { value: new THREE.Vector3() },
+      uMouth: { value: new THREE.Vector3() },
+      uBody: { value: new THREE.Vector3() },
+      uEyes: { value: new THREE.Vector3() },
+      uPresence: { value: new THREE.Vector3(1.03, 1.08, 0) },
+      uJaw: { value: 0 },
+      uBlink: { value: 0 },
+      uBreath: { value: 0 },
+      uFaceScale: { value: 1.18 },
+      uFaceOffset: { value: new THREE.Vector3(0, -0.32, 0) },
     }),
     [],
   )
@@ -139,7 +160,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
           uRot: { value: 0 },
           uFlow: { value: 0 },
           uScale: { value: 1 },
-          uBreath: { value: 0 },
+          uOrbBreath: { value: 0 },
           uConverge: { value: 0 },
           uDepth: { value: 0 },
           uViolet: { value: 0 },
@@ -151,7 +172,6 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
           uPixelRatio: { value: pixelRatio },
           uMorph: { value: 0 },
           uOrbTilt: { value: new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationFromEuler(TILT)) },
-          uGaze: { value: new THREE.Vector2() },
           ...pose,
         },
       }),
@@ -247,7 +267,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       additive({
         vertexShader: traceVertex,
         fragmentShader: traceFragment,
-        uniforms: { uReveal: { value: 0 }, uTime: { value: 0 }, uListen: { value: 0 }, uSpeak: { value: 0 }, uEnergy: { value: 0 }, ...pose },
+        uniforms: { uReveal: { value: 0 }, ...pose },
       }),
     [pose],
   )
@@ -305,33 +325,33 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     fade.value = orbVisible
     for (const obj of orbOnly.current) if (obj) obj.visible = orbVisible > 0.001
 
-    // The face's own life: breath, small head movements, eye attention.
+    // The Avatar's life comes from FATHI's own motion controller: head pose,
+    // gaze, blinks, brows, breath, nods, and a jaw that only speech can open.
     const ptr = reducedMotion ? { x: 0, y: 0 } : getPointer()
-    // A gentle three-quarter turn, so the face reads as a form, never a cut-out.
-    // Listening, PEPO turns toward you and leans in; speaking, it nods softly.
-    const turn = -0.42 * (1 - p.listen * 0.6)
-    c.yaw = damp(c.yaw, turn + Math.sin(c.t * 0.11) * 0.08 * (1 - p.listen * 0.5) + Math.sin(c.t * 0.29) * 0.025 + ptr.x * 0.12, 0.8, dt)
-    c.pitch = damp(
-      c.pitch,
-      Math.sin(c.t * 0.15) * 0.025 - p.listen * 0.07 + p.speak * c.energy * 0.03 * Math.sin(c.t * 3.1) + ptr.y * 0.04,
-      0.5,
-      dt,
-    )
-    if (c.t > c.gazeAt) {
-      c.gazeAt = c.t + 2.2 + Math.random() * 3.5
-      c.gtx = (Math.random() - 0.5) * 2
-      c.gty = (Math.random() - 0.5) * 0.8
-    }
-    c.gx = damp(c.gx, c.gtx, 0.09, dt)
-    c.gy = damp(c.gy, c.gty, 0.09, dt)
-    pose.uPose.value.set(c.yaw, c.pitch, Math.sin((c.t * Math.PI * 2) / 5.5))
+    const fstate = FATHI_STATE[state]
+    motion.setState(fstate)
+    motion.setReduced(reducedMotion)
+    motion.setAmplitude(state === 'speaking' || state === 'listening' ? e : 0)
+    motion.setPointer(ptr.x, -ptr.y, pointerActive())
+    const mo = motion.step(dt)
+    pose.uHead.value.set(mo.yaw, mo.pitch, mo.roll)
+    pose.uMouth.value.set(mo.brow, mo.viseme[1], mo.viseme[2])
+    pose.uBody.value.set(mo.body[0], mo.body[1], 0)
+    pose.uEyes.value.set(mo.brows[0], mo.brows[1], mo.squint)
+    pose.uJaw.value = mo.jaw
+    pose.uBlink.value = mo.blink
+    pose.uBreath.value = mo.breath
+    const light = presenceLight(fstate, c.energy)
+    const lb = 1 - Math.exp(-dt / 0.28)
+    const pl = pose.uPresence.value
+    pl.set(pl.x + (light[0] - pl.x) * lb, pl.y + (light[1] - pl.y) * lb, pl.z + (light[2] - pl.z) * lb)
 
     const u = bodyMat.uniforms
     u.uTime.value = c.t
     u.uRot.value = c.rot
     u.uFlow.value = c.flow
     u.uScale.value = p.scale
-    u.uBreath.value = reducedMotion ? p.breath * 0.4 : p.breath
+    u.uOrbBreath.value = reducedMotion ? p.breath * 0.4 : p.breath
     u.uConverge.value = p.converge
     u.uDepth.value = p.depth
     u.uViolet.value = p.violet
@@ -340,12 +360,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     u.uEnergy.value = c.energy
     u.uGlow.value = p.glow
     u.uMorph.value = m
-    u.uGaze.value.set(c.gx, c.gy)
     traceMat.uniforms.uReveal.value = THREE.MathUtils.smoothstep(m, 0.55, 1)
-    traceMat.uniforms.uTime.value = c.t
-    traceMat.uniforms.uListen.value = p.listen
-    traceMat.uniforms.uSpeak.value = p.speak
-    traceMat.uniforms.uEnergy.value = c.energy
 
     if (spinGroup.current) {
       spinGroup.current.rotation.y = c.rot
@@ -400,8 +415,10 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
 
     // Tiny parallax toward the pointer: PEPO notices you; it doesn't chase you.
     if (root.current) {
-      root.current.rotation.y = damp(root.current.rotation.y, ptr.x * 0.07, 1.2, dt)
-      root.current.rotation.x = damp(root.current.rotation.x, ptr.y * 0.05, 1.2, dt)
+      // FATHI is a shallow relief: keep its parallax small so it never turns into a cut-out.
+      const tilt = 1 - m * 0.75
+      root.current.rotation.y = damp(root.current.rotation.y, ptr.x * 0.07 * tilt, 1.2, dt)
+      root.current.rotation.x = damp(root.current.rotation.x, ptr.y * 0.05 * tilt, 1.2, dt)
       root.current.position.x = damp(root.current.position.x, ptr.x * 0.04, 1.2, dt)
       root.current.position.y = damp(root.current.position.y, -ptr.y * 0.03, 1.2, dt)
     }

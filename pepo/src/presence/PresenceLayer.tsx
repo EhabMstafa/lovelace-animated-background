@@ -17,8 +17,8 @@ export function PresenceLayer({ compact = false }: { compact?: boolean }) {
   const counts = useMemo(
     () =>
       compact
-        ? { shell: 1100, inner: 380, halo: 150, total: 20000 }
-        : { shell: 1700, inner: 620, halo: 240, total: 42000 },
+        ? { shell: 1100, inner: 380, halo: 150, total: 30000 }
+        : { shell: 1700, inner: 620, halo: 240, total: 53698 },
     [compact],
   )
 

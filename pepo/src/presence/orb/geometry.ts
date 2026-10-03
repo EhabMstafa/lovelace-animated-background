@@ -73,7 +73,6 @@ export function createOrbParticles(counts: ParticleCounts, seed = 7) {
   geo.setAttribute('aKind', new THREE.BufferAttribute(kind, 1))
   geo.setAttribute('aAxis', new THREE.BufferAttribute(axis, 3))
   geo.setAttribute('aFace', new THREE.BufferAttribute(new Float32Array(total * 3), 3))
-  geo.setAttribute('aFaceN', new THREE.BufferAttribute(new Float32Array(total * 3), 3))
   geo.setAttribute('aFaceKind', new THREE.BufferAttribute(new Float32Array(total), 1))
   geo.setAttribute('aFaceW', new THREE.BufferAttribute(new Float32Array(total), 1))
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 3)
@@ -82,13 +81,12 @@ export function createOrbParticles(counts: ParticleCounts, seed = 7) {
 
 export interface FaceData {
   position: Float32Array
-  normal: Float32Array
-  kind: Float32Array
   weight: Float32Array
+  warm: Float32Array
 }
 
 /**
- * Pair every Orb particle with a point on the face. Both sets are ordered
+ * Pair every Orb particle with a point of the Avatar. Both sets are ordered
  * by height, so particles at the top of the Orb become the crown and those
  * at the bottom become the shoulders: the flow between forms reads as one
  * coherent movement instead of a shuffle.
@@ -97,54 +95,52 @@ export function assignFaceTargets(geo: THREE.BufferGeometry, face: FaceData) {
   const orbPos = geo.getAttribute('position') as THREE.BufferAttribute
   const seeds = geo.getAttribute('aSeed') as THREE.BufferAttribute
   const n = orbPos.count
-  const m = face.position.length / 3
+  const m = face.weight.length
   const orbOrder = Array.from({ length: n }, (_, i) => i).sort(
     (a, b) => orbPos.getY(a) + seeds.getX(a) * 0.15 - (orbPos.getY(b) + seeds.getX(b) * 0.15),
   )
   const faceOrder = Array.from({ length: m }, (_, i) => i).sort((a, b) => face.position[a * 3 + 1] - face.position[b * 3 + 1])
   const fp = geo.getAttribute('aFace') as THREE.BufferAttribute
-  const fn = geo.getAttribute('aFaceN') as THREE.BufferAttribute
   const fk = geo.getAttribute('aFaceKind') as THREE.BufferAttribute
   const fw = geo.getAttribute('aFaceW') as THREE.BufferAttribute
   for (let r = 0; r < n; r++) {
     const o = orbOrder[r]
     const f = faceOrder[Math.min(m - 1, Math.floor((r / n) * m))]
     fp.setXYZ(o, face.position[f * 3], face.position[f * 3 + 1], face.position[f * 3 + 2])
-    fn.setXYZ(o, face.normal[f * 3], face.normal[f * 3 + 1], face.normal[f * 3 + 2])
-    fk.setX(o, face.kind[f])
+    fk.setX(o, face.warm[f])
     fw.setX(o, face.weight[f])
   }
-  for (const a of [fp, fn, fk, fw]) a.needsUpdate = true
+  for (const a of [fp, fk, fw]) a.needsUpdate = true
 }
 
 /**
- * Light streams: bundles of long ribbons flowing around one shared, tilted
- * axis, like field lines. Streams in a bundle run side by side, so the
- * light inside the glass reads as one coherent current, not a scribble.
- * Returned as point lists for ribbon geometry.
+ * Light streams, organised: a few bands of parallel ribbons sweeping around
+ * one shared, tilted axis. Ribbons in a band are evenly spaced and nested in
+ * depth, follow the same gentle wave and start and end in a staggered fan,
+ * so the light inside the glass reads as calm, ordered currents.
  */
-export function createStreams(bundles: number, perBundle: number, seed: number, rMin: number, rMax: number, segments = 110) {
+export function createStreams(bands: number, perBand: number, seed: number, rMin: number, rMax: number, segments = 120) {
   const rand = mulberry32(seed)
   const lines: THREE.Vector3[][] = []
   const axis = new THREE.Vector3(0.38, 1, 0.22).normalize()
   const frame = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis)
-  for (let b = 0; b < bundles; b++) {
-    const lat0 = -0.75 + (1.5 * (b + 0.5)) / bundles + (rand() - 0.5) * 0.2
-    const lon0 = rand() * Math.PI * 2
-    const len = 2.2 + rand() * 1.4
-    const waveAmp = 0.18 + rand() * 0.22
-    const waveFreq = 0.8 + rand() * 0.9
-    for (let k = 0; k < perBundle; k++) {
-      const spread = (k - (perBundle - 1) / 2) * (0.045 + rand() * 0.02)
-      const r = rMin + rand() * (rMax - rMin)
-      const startT = rand() * 0.25
-      const endT = 0.75 + rand() * 0.25
+  for (let b = 0; b < bands; b++) {
+    const lat0 = bands === 1 ? 0 : -0.5 + (1.0 * b) / (bands - 1)
+    const lon0 = (b / bands) * Math.PI * 2 + rand() * 0.3
+    const len = 2.6
+    const wave = 0.07
+    for (let k = 0; k < perBand; k++) {
+      const u = perBand === 1 ? 0.5 : k / (perBand - 1)
+      const lat = lat0 + (u - 0.5) * 0.2
+      const r = rMin + (rMax - rMin) * u
+      const startT = u * 0.12
+      const endT = 0.82 + u * 0.12
       const line: THREE.Vector3[] = []
       for (let s = 0; s <= segments; s++) {
         const t = startT + (endT - startT) * (s / segments)
         const lon = lon0 + t * len
-        const lat = lat0 + spread + Math.sin(t * Math.PI * waveFreq + b) * waveAmp
-        const p = new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon))
+        const la = lat + Math.sin(t * Math.PI * 1.2 + b * 1.7) * wave
+        const p = new THREE.Vector3(Math.cos(la) * Math.cos(lon), Math.sin(la), Math.cos(la) * Math.sin(lon))
         line.push(p.multiplyScalar(r).applyQuaternion(frame))
       }
       lines.push(line)

@@ -1,47 +1,27 @@
-import { faceLight, facePose, helpers, palette } from '../glsl'
+import { fathiRig, helpers, palette } from '../glsl'
 
-/** Hairline traces: the anatomy the particles hang on (eyes, brows, ears, mask weave, neck strands). */
+/** FATHI's strands: neck flow, throat, shoulder links and jaw guide, on the same rig. */
 export const traceVertex = /* glsl */ `
   ${palette}
   ${helpers}
-  ${facePose}
-  ${faceLight}
-  attribute float aT;
-  attribute float aKind;
-  attribute vec3 aNormal;
-  uniform float uReveal;
-  uniform float uTime;
-  uniform float uListen;
-  uniform float uSpeak;
-  uniform float uEnergy;
+  ${fathiRig}
+  attribute float aStrength;
+  attribute float aProgress;
+  attribute float aWarm;
   varying float vAlpha;
   varying vec3 vColor;
   varying float vT;
   void main() {
-    vec3 n = aNormal;
-    vec3 p = poseFace(position, n);
-    vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    gl_Position = projectionMatrix * mv;
-    vec3 vn = normalize(normalMatrix * n);
-    vec4 light = faceLighting(vn);
-    float mask = step(0.5, aKind) * (1.0 - step(1.5, aKind));
-    float feature = step(1.5, aKind) * (1.0 - step(2.5, aKind));
-    float strand = step(2.5, aKind) * (1.0 - step(3.5, aKind));
-    float edge = step(4.5, aKind) * (1.0 - step(5.5, aKind));
-    float contour = step(5.5, aKind);
-    vColor = mask * mix(C_BLUE, C_LILAC, 0.45) + edge * mix(C_LILAC, C_WHITE, 0.45) + feature * C_SKY
-           + strand * mix(C_SKY, C_DEEP, smoothstep(-0.6, -1.15, position.y))
-           + contour * mix(C_DEEP, C_SKY, light.x);
-    vColor += C_LILAC * light.z * 0.5;
-    vAlpha = (mask * 0.22 + edge * 0.6 + feature * 0.22 + strand * 0.2 + contour * 0.16)
-           * (0.35 + 0.65 * light.x + 0.5 * light.y + 0.5 * light.z)
-           * mix(0.08, 1.0, light.w)
-           * smoothstep(-1.38, -1.02, position.y) * (1.0 - smoothstep(0.7, 1.05, abs(position.x)));
-    // Voice: the mask weave carries speech downward; contours near the ears carry listening.
-    float voice = uSpeak * uEnergy * (0.5 + 0.5 * sin(position.y * 26.0 + uTime * 6.5));
-    float hear = uListen * uEnergy * smoothstep(0.2, 0.45, abs(position.x)) * (0.5 + 0.5 * sin((0.5 - abs(position.x)) * 34.0 + uTime * 7.0));
-    vAlpha *= 1.0 + (mask + edge) * voice * 1.4 + contour * hear * 2.5;
-    vT = aT;
+    vec3 p = rigPosition(position, aWarm);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(faceToWorld(p), 1.0);
+    float depth = smoothstep(-0.3, 0.45, position.z);
+    vec2 finish = finishAt(position, aWarm);
+    float lip = lipTrace(position) * aWarm;
+    float speechGlow = (1.0 + uJaw * .06 * aWarm) * mix(uPresence.x, uPresence.y, aWarm);
+    vAlpha = aStrength * (.55 + .45 * depth) * smoothstep(-1.96, -1.74, position.y) * finish.x * speechGlow * 1.08
+           * (1.0 + lip * (.24 + uJaw * .15)) * mix(1.0, 0.6, aWarm);
+    vColor = avatarColor(position, finish.y, lip * 0.5);
+    vT = aProgress;
   }
 `
 
@@ -51,7 +31,7 @@ export const traceFragment = /* glsl */ `
   varying vec3 vColor;
   varying float vT;
   void main() {
-    // Lines draw themselves along their length as the face forms.
+    // Strands draw themselves along their length as the face forms.
     float shown = smoothstep(vT, vT + 0.15, uReveal * 1.15);
     float a = vAlpha * shown;
     if (a < 0.003) discard;

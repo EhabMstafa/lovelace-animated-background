@@ -1,30 +1,25 @@
 import { useEffect, useState } from 'react'
-import HeadWorker from './headWorker?worker&inline'
-
-import type { HeadCloud } from './scanHead'
+import avatarAsset from './assets/fathi.bin?inline'
+import { decodeFathi, type HeadCloud } from './fathiHead'
 
 export type HeadCloudData = HeadCloud
 
+function decodeDataUrl(url: string) {
+  const bin = atob(url.slice(url.indexOf(',') + 1))
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return bytes.buffer
+}
+
 /**
- * Sculpts the Avatar in a worker once the Orb is already on screen.
- * Returns null until the cloud is ready.
+ * Decodes the Avatar once the Orb is already on screen, so the first frames
+ * belong to the Orb. Returns null until ready.
  */
 export function useHeadCloud(total: number) {
-  const [cloud, setCloud] = useState<HeadCloudData | null>(null)
-
+  const [cloud, setCloud] = useState<HeadCloud | null>(null)
   useEffect(() => {
-    const worker = new HeadWorker()
-    worker.onmessage = (e: MessageEvent<HeadCloudData>) => {
-      setCloud(e.data)
-      worker.terminate()
-    }
-    // Give the first frames to the Orb.
-    const id = window.setTimeout(() => worker.postMessage({ total }), 400)
-    return () => {
-      window.clearTimeout(id)
-      worker.terminate()
-    }
+    const id = window.setTimeout(() => setCloud(decodeFathi(decodeDataUrl(avatarAsset), total)), 250)
+    return () => window.clearTimeout(id)
   }, [total])
-
   return cloud
 }
