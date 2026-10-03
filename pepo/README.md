@@ -179,7 +179,7 @@ There is one toolbar (the navigation rail and the dock are merged): places
 (Home, Workspace, Conversations, Memory), then pinned tools, then whatever is
 open or put away (a dot, hollow when put away), then up to two tools closed
 in the last ten minutes, then **More** (a shelf with every tool) and
-**Settings**. It sits at the bottom, left or right (Settings), and can
+**Settings**. It sits on the left by default, or at the bottom or right (Settings), and can
 auto-hide: a faint mark at its edge shows where it waits, it appears when the
 pointer or keyboard focus reaches it and leaves 0.7 s after. A hidden
 toolbar takes no room beside the work. On phones it stays one button under
@@ -252,8 +252,9 @@ Orb.
 point cloud, depth, contour, strands and per-state lighting
 (`src/presence/fathi/fathi-avatar.js`; see `USAGE.txt`). The only change to
 that file are three small changes, each marked "PEPO": a motion controller
-can be passed in (without one, FATHI uses its own); the iris area follows
-the gaze (eyelids and socket stay put); and it redraws at 30 fps instead of
+can be passed in (without one, FATHI uses its own); the pupils, which the
+artwork draws low and outward on the lower lid, are lifted into the open eye
+and follow the gaze (lids and socket stay put, a blink covers them); and it redraws at 30 fps instead of
 20 while something moves (10 fps at rest, as before). The geometry files are embedded in the
 bundle and served to FATHI's own requests (`embeddedAssets.ts`), so the
 renderer runs unchanged even from a single-file build.

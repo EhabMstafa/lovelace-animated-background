@@ -9,7 +9,7 @@ export interface DockPrefs {
 }
 
 const STORAGE_KEY = 'pepo.dock'
-const DEFAULTS: DockPrefs = { side: 'bottom', autoHide: false }
+const DEFAULTS: DockPrefs = { side: 'left', autoHide: false }
 const listeners = new Set<() => void>()
 
 function stored(): DockPrefs {

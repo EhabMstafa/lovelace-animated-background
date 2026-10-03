@@ -256,9 +256,14 @@ const RIG_GLSL=`
     float browField=browX*browY*(1.0-warm);
     float sideBrow=mix(uEyes.x,uEyes.y,step(0.0,p.x));
     p.y+=sideBrow*.050*browField;
-    // PEPO: the iris area follows the gaze; the eyelids and socket stay where they are.
-    float iris=exp(-pow(length(vec2(abs(bind.x)-.305,bind.y+.015))/.05,2.0))*(1.0-warm)*eyeX;
-    p.x+=uGaze.x*.045*iris;p.y+=uGaze.y*.02*iris;
+    // PEPO: the artwork's pupils sit low and outward, on the lower lid (the
+    // source-image iris estimate). Lift them into the open eye, let them follow
+    // the gaze, and let the lids cover them in a blink. Lids and socket stay put.
+    vec2 pq=vec2(abs(bind.x)-.362,bind.y+.019);
+    float pupil=(1.0-smoothstep(.026,.032,abs(pq.x)))*(1.0-smoothstep(.017,.021,abs(pq.y)))*(1.0-warm);
+    p.x-=sign(bind.x)*.062*pupil;
+    p.y+=(.030-uBlink*.032)*pupil;
+    p.x+=uGaze.x*.030*pupil;p.y+=uGaze.y*.012*pupil;
     float head=smoothstep(-1.35,-.48,bind.y);
     float torso=1.0-smoothstep(-1.30,-.78,p.y);
     float shoulder=torso*smoothstep(.34,.78,abs(p.x));
