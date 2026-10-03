@@ -10,6 +10,7 @@ export const bodyVertex = /* glsl */ `
   uniform float uFlow;
   uniform float uScale;
   uniform float uOrbBreath;
+  uniform float uBreathWave; // -1..1, varied cycle length (orbMotion.ts)
   uniform float uConverge;
   uniform float uDepth;
   uniform float uViolet;
@@ -46,14 +47,14 @@ export const bodyVertex = /* glsl */ `
 
     float r = length(p);
     vec3 dir = p / max(r, 1e-4);
-    float breath = sin(t * 6.2831 / 6.0);
+    float breath = uBreathWave;
     r *= 1.0 + uOrbBreath * breath * (shell + 0.6 * inner + 1.5 * halo);
     r *= 1.0 - uConverge * (shell + 0.4 * inner + 2.6 * halo);
     float ripple = sin(dir.y * 8.0 - t * 2.6 + dir.x * 1.5);
-    r += uListen * uEnergy * (halo * (0.10 + 0.07 * ripple) + shell * 0.022 * ripple);
+    r += uListen * uEnergy * (halo * (0.06 + 0.04 * ripple) + shell * 0.008 * ripple);
     float wave = sin(r * 7.0 - t * 4.0);
     float speak = uSpeak * uEnergy;
-    r += speak * 0.028 * wave * (shell + halo);
+    r += speak * 0.014 * wave * (shell + halo);
 
     p = uOrbTilt * (dir * r * uScale);
     dir = uOrbTilt * dir;
@@ -80,8 +81,8 @@ export const bodyVertex = /* glsl */ `
       + halo * (0.1 + 0.3 * uListen * uEnergy) * (0.35 + 0.65 * aSeed.x);
     alpha *= 0.72 + 0.28 * sin(t * (0.5 + aSeed.z * 1.3) + aSeed.x * 40.0);
     alpha *= 1.0 + sparkle * 1.3;
-    alpha *= 1.0 + speak * 0.7 * smoothstep(0.2, 1.0, wave);
-    alpha *= 1.0 + uListen * (0.35 + 1.2 * uEnergy) * smoothstep(0.82, 1.0, ripple) * shell;
+    alpha *= 1.0 + speak * 0.45 * smoothstep(0.2, 1.0, wave);
+    alpha *= 1.0 + uListen * (0.35 + 0.6 * uEnergy) * smoothstep(0.82, 1.0, ripple) * shell;
   }
 
   void main() {

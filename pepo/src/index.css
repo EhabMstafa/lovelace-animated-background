@@ -44,6 +44,8 @@
   --accent-secondary: var(--violet);
   --glow: rgb(var(--glow-rgb));
   --focus: rgb(var(--accent-rgb) / 0.55);
+  --presence-orb-filter: none;
+  --presence-avatar-filter: none;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 
@@ -58,8 +60,8 @@
   color-scheme: dark;
 }
 
-/* Light: daylight glass over a dawn lake. PEPO's body is inverted into ink
-   (see "Light theme" under the presence stage). */
+/* Light: daylight glass over a dawn lake. PEPO keeps its colours; only its
+   contrast adapts (the two presence filter tokens). */
 :root[data-theme='light'] {
   --space-0: #eceff3;
   --space-1: #e6e9ee;
@@ -91,6 +93,8 @@
   --map-land-a: #d4e1f2;
   --map-land-b: #c3d4ec;
   --term-ok: #0f78b0;
+  --presence-orb-filter: contrast(1.06) saturate(1.1);
+  --presence-avatar-filter: brightness(0.88) saturate(1.25) contrast(1.18) hue-rotate(8deg);
   color-scheme: light;
 }
 
@@ -212,32 +216,11 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
   transition: opacity 0.18s var(--ease-in-out);
 }
 .fathi-avatar.is-visible { opacity: 1; transition: opacity 0.22s var(--ease-out) 0.13s; }
-/* Light theme: PEPO's body is drawn in light, which vanishes on a pale sky.
-   Inverting it (and turning the hue back round) keeps every colour family
-   but turns light-on-dark into ink-on-paper: deep cyan line work, a burnt
-   orange mask, a pale glass Orb. */
-:root[data-theme='light'] .presence-stage canvas,
-:root[data-theme='light'] .fathi-avatar {
-  filter: invert(1) hue-rotate(180deg) saturate(1.15);
-}
-/* What was white light would invert to black: lift the darkest ink to a deep
-   navy. "Lighten" leaves everything brighter than the navy (the sky, the
-   coloured line work) untouched. */
-.presence-ink {
-  opacity: 0;
-  position: absolute;
-  z-index: 2;
-  left: var(--presence-x, 50%);
-  top: var(--presence-y, var(--orb-y));
-  width: var(--stage);
-  height: var(--stage);
-  transform: translate(-50%, -50%) scale(var(--presence-scale, 1));
-  transition: left 1.1s var(--ease-out), top 1.1s var(--ease-out), transform 1.1s var(--ease-out);
-  background: #0e2a5c;
-  mix-blend-mode: lighten;
-  pointer-events: none;
-}
-:root[data-theme='light'] .presence-ink { opacity: 1; transition: opacity 0.15s linear 0.34s; }
+/* PEPO keeps its own colours in both themes. On the light theme only
+   contrast and saturation adapt (theme tokens), so the same cyan and orange
+   line work stays readable on a pale sky. */
+.presence-stage canvas { filter: var(--presence-orb-filter); }
+.fathi-avatar { filter: var(--presence-avatar-filter); }
 
 /* ───────── theme toggle ───────── */
 .theme-toggle {
@@ -249,21 +232,19 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
   color: var(--text-secondary);
   border: 1px solid var(--hairline);
   background: var(--toggle-bg);
-  transition: color 0.2s var(--ease-out);
+  transition: color 0.15s var(--ease-out), scale 0.15s var(--ease-out);
 }
 .theme-toggle:hover { color: var(--text-primary); }
-/* Theme switching: colours cross-fade for ~300 ms; PEPO dims for a moment
-   while its rendering flips, so there is never a flash. */
+/* Theme switching: colours, PEPO's contrast and the background cross-fade
+   for ~300 ms, so there is never a flash. */
 :root.theme-switching,
-:root.theme-switching *:not(.ambient-canvas):not(.presence-ink),
+:root.theme-switching *:not(.ambient-canvas),
 :root.theme-switching *::before,
 :root.theme-switching *::after {
   transition: background-color 0.3s var(--ease-in-out), border-color 0.3s var(--ease-in-out), color 0.3s var(--ease-in-out),
-    fill 0.3s var(--ease-in-out), stroke 0.3s var(--ease-in-out), box-shadow 0.3s var(--ease-in-out), opacity 0.3s var(--ease-in-out) !important;
+    fill 0.3s var(--ease-in-out), stroke 0.3s var(--ease-in-out), box-shadow 0.3s var(--ease-in-out), opacity 0.3s var(--ease-in-out),
+    filter 0.3s var(--ease-in-out) !important;
 }
-:root.theme-switching .presence-stage canvas,
-:root.theme-switching .fathi-avatar.is-visible { animation: presence-theme 0.34s var(--ease-out); }
-@keyframes presence-theme { from { opacity: 0.25; } to { opacity: 1; } }
 
 /* ───────── near plane ───────── */
 .global-header {
@@ -391,7 +372,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
   background: radial-gradient(circle at 50% 38%, rgb(var(--accent-rgb) / 0.16), rgba(39, 107, 255, 0.04) 70%);
   border: 1px solid rgb(var(--accent-rgb) / 0.22);
   box-shadow: 0 0 calc(6px + var(--energy) * 24px) rgb(var(--glow-rgb) / calc(0.12 + var(--energy) * 0.35));
-  transition: border-color 0.3s var(--ease-out), background 0.3s var(--ease-out);
+  transition: border-color 0.3s var(--ease-out), background 0.3s var(--ease-out), scale 0.15s var(--ease-out);
 }
 .mic:hover { border-color: rgb(var(--accent-rgb) / 0.42); }
 .mic-core {
@@ -418,7 +399,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
   display: grid;
   place-items: center;
   color: var(--text-muted);
-  transition: color 0.18s, background 0.18s;
+  transition: color 0.15s, background 0.15s, scale 0.15s var(--ease-out);
 }
 .icon-btn:hover { color: var(--text-primary); background: var(--hover); }
 .icon-btn:disabled { opacity: 0.35; cursor: default; background: none; }
@@ -475,7 +456,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
   display: grid;
   place-items: center;
   color: var(--text-secondary);
-  transition: color 0.18s var(--ease-out), background 0.18s var(--ease-out);
+  transition: color 0.15s var(--ease-out), background 0.15s var(--ease-out), scale 0.15s var(--ease-out);
 }
 .dock-icon { display: grid; transition: transform 0.2s var(--ease-out); opacity: 0.85; }
 .dock-item:hover, .dock-item:focus-visible { color: var(--text-primary); background: var(--hover); }
@@ -553,7 +534,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
   display: grid;
   place-items: center;
   color: var(--text-muted);
-  transition: color 0.18s, background 0.18s;
+  transition: color 0.15s, background 0.15s, scale 0.15s var(--ease-out);
 }
 .nav-item:hover, .nav-item:focus-visible { color: var(--text-primary); background: var(--hover); }
 .nav-item.is-active { color: var(--cyan-soft); }
@@ -667,7 +648,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
   border-radius: 999px;
   color: var(--text-muted);
   font-size: 12px;
-  transition: color 0.2s var(--ease-out);
+  transition: color 0.15s var(--ease-out), scale 0.15s var(--ease-out);
 }
 .form-option:hover { color: var(--text-secondary); }
 .form-option.is-active { color: var(--text-primary); }
@@ -742,7 +723,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
   place-items: center;
   color: var(--text-muted);
   opacity: 0.6;
-  transition: opacity 0.18s, background 0.18s, color 0.18s;
+  transition: opacity 0.15s, background 0.15s, color 0.15s, scale 0.15s var(--ease-out);
 }
 .window-action:hover, .window-action:focus-visible { opacity: 1; color: var(--text-primary); background: var(--hover); }
 .window-body { flex: 1; min-height: 0; position: relative; overflow: hidden; }
@@ -819,10 +800,28 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
 .sheet-tabs { position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; pointer-events: auto; }
 .sheet-tabs button { width: 34px; height: 34px; border-radius: 12px; display: grid; place-items: center; color: var(--text-muted); background: var(--toggle-bg); border: 1px solid var(--hairline); }
 .sheet-tabs button.is-active { color: var(--cyan-soft); border-color: rgb(var(--accent-rgb) / 0.3); }
-:root[data-workspace='sheet'] .caption { opacity: 0; }
+/* Phones with a tool open: PEPO's line stays visible, one line above the voice control. */
+:root[data-workspace='sheet'] .caption {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(env(safe-area-inset-bottom) + 100px);
+  margin: 0;
+  min-height: 0;
+}
+:root[data-workspace='sheet'] .caption p {
+  font-size: 14px;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* Phones: one small tool button under the voice control; hidden while a sheet is open (its tabs take over). */
+.dock-wrap.is-compact .dock { padding: 4px; }
+:root[data-workspace='sheet'] .dock-wrap.is-compact { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .presence-stage, .fathi-stage, .presence-ink, .ambient-orb-reflection { transition: none; }
+  .presence-stage, .fathi-stage, .ambient-orb-reflection { transition: none; }
 }
 
 /* With PEPO stepped aside, its words stay with it, under the presence. */
@@ -868,14 +867,14 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
   border-radius: 12px;
   color: var(--text-secondary);
   font-size: 11px;
-  transition: background 0.18s, color 0.18s;
+  transition: background 0.15s, color 0.15s, scale 0.15s var(--ease-out);
 }
 .tool-shelf button:hover, .tool-shelf button:focus-visible { background: var(--hover); color: var(--text-primary); }
 .tool-shelf button.is-open { color: var(--cyan-soft); }
 
 /* ───────── status on demand ───────── */
 .status { position: relative; }
-.status-trigger { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 8px; color: var(--text-secondary); }
+.status-trigger { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 8px; color: var(--text-secondary); transition: scale 0.15s var(--ease-out); }
 .status-trigger:hover { color: var(--text-primary); }
 .local-dot.is-warn { background: var(--text-secondary); box-shadow: none; }
 .status-panel {
@@ -910,3 +909,126 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
 
 /* Phones have no dock to put surfaces away into: close only, switch with the tabs. */
 :root[data-workspace='sheet'] .window-action.is-minimise { display: none; }
+
+/* Microinteractions: a press is a small, quick give (about 100 ms), with no
+   bounce; release eases back in about 150 ms. */
+:is(.dock-item, .mic, .form-option, .theme-toggle, .window-action, .icon-btn, .nav-item, .tool-shelf button, .status-trigger, .sheet-tabs button, .user-chip):active {
+  scale: 0.97;
+  transition-duration: 0.1s;
+}
+
+/* Window controls appear where they are relevant: on hover or keyboard focus
+   (always shown on touch screens). */
+@media (hover: hover) {
+  .window-actions { opacity: 0; transition: opacity 0.15s var(--ease-out); }
+  .floating-window:hover .window-actions,
+  .floating-window:focus-within .window-actions { opacity: 1; }
+}
+
+/* The surface in focus: a clearer edge and a little more depth; others stay readable. */
+.floating-window.is-front { border-color: rgb(var(--accent-rgb) / 0.14); box-shadow: inset 0 1px 0 var(--inset), 0 28px 70px -26px var(--shadow); }
+
+/* ───────── surfaces: browser, files, code, documents, tasks ───────── */
+.browser-surface, .files-surface, .code-surface, .document-surface, .tasks-surface { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; }
+
+/* Browser */
+.browser-bar { flex: none; display: flex; align-items: center; gap: 2px; padding: 0 10px 8px; }
+.browser-bar .icon-btn:disabled { opacity: 0.35; cursor: default; }
+.browser-address {
+  flex: 1;
+  min-width: 0;
+  margin-left: 6px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border-radius: 9px;
+  background: var(--hover);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.browser-address span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browser-page { flex: 1; min-height: 0; overflow-y: auto; border-top: 1px solid var(--border); }
+.is-spinning { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.results { list-style: none; margin: 0; padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 16px; }
+.results li { display: flex; flex-direction: column; gap: 2px; max-width: 64ch; }
+.result-host { font-size: 11.5px; color: var(--text-muted); }
+.result-title { text-align: left; font-size: 14.5px; color: var(--accent); line-height: 1.35; }
+.result-title:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 3px; }
+.result-title:disabled { cursor: default; color: var(--text-primary); }
+.results p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
+.reader { max-width: 62ch; padding: 18px 22px 26px; display: flex; flex-direction: column; gap: 10px; }
+.reader-site { margin: 0; font-size: 11.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+.reader h1 { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: -0.005em; color: var(--text-primary); text-wrap: balance; }
+.reader h2 { margin: 6px 0 0; font-size: 14px; font-weight: 500; color: var(--text-primary); }
+.reader p, .reader li { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--text-secondary); }
+.reader ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+
+/* Files */
+.crumbs { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 0 14px 8px; font-size: 12px; color: var(--text-muted); }
+.crumb { display: inline-flex; align-items: center; gap: 2px; }
+.crumb button { padding: 2px 6px; border-radius: 6px; color: var(--text-secondary); }
+.crumb button:hover:not(:disabled) { background: var(--hover); color: var(--text-primary); }
+.crumb button:disabled { color: var(--text-primary); cursor: default; }
+.files-head, .file-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px 80px; gap: 12px; align-items: center; }
+.files-head { flex: none; padding: 6px 18px; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.files-list { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 4px 8px; }
+.file-row { width: 100%; padding: 7px 10px; border-radius: 8px; text-align: left; font-size: 13px; color: var(--text-primary); transition: background 0.15s; }
+.file-row:hover { background: var(--hover); }
+.file-row.is-selected { background: rgb(var(--accent-rgb) / 0.12); }
+.file-name { display: flex; align-items: center; gap: 9px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-name svg { flex: none; color: var(--accent); opacity: 0.85; }
+.file-meta { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.files-detail { flex: none; display: flex; justify-content: space-between; gap: 12px; padding: 8px 18px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-secondary); }
+.files-detail span:last-child { color: var(--text-muted); }
+@media (max-width: 640px) {
+  .files-head, .file-row { grid-template-columns: minmax(0, 1fr) 70px; }
+  .files-head span:nth-child(2), .file-row .file-meta:nth-child(2) { display: none; }
+}
+
+/* Code */
+.code-tabs { flex: none; display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--border); }
+.code-tab { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; padding: 6px 10px; color: var(--text-primary); border-bottom: 1px solid var(--accent); margin-bottom: -1px; }
+.code-body { flex: 1; min-height: 0; overflow: auto; margin: 0; padding: 10px 0 16px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; line-height: 1.65; color: var(--text-primary); }
+.code-line { display: grid; grid-template-columns: 44px 1fr; padding-right: 16px; }
+.code-line.is-changed { background: rgb(var(--accent-rgb) / 0.07); box-shadow: inset 2px 0 0 rgb(var(--accent-rgb) / 0.6); }
+.code-num { text-align: right; padding-right: 14px; color: var(--text-muted); opacity: 0.7; user-select: none; font-variant-numeric: tabular-nums; }
+.code-line code { white-space: pre; font: inherit; }
+.tok-keyword { color: #b391ff; }
+.tok-string { color: #7fd4a8; }
+.tok-number { color: #f2b56b; }
+.tok-comment { color: var(--text-muted); font-style: italic; }
+.tok-type { color: var(--accent); }
+.tok-punct { color: var(--text-secondary); }
+:root[data-theme='light'] .tok-keyword { color: #7044c9; }
+:root[data-theme='light'] .tok-string { color: #1e7a4c; }
+:root[data-theme='light'] .tok-number { color: #a5610f; }
+
+/* Documents */
+.document-surface { overflow-y: auto; }
+.doc-page { max-width: 64ch; width: 100%; margin: 0 auto; padding: 8px 26px 30px; display: flex; flex-direction: column; gap: 10px; }
+.doc-page h1 { margin: 0; font-size: 22px; font-weight: 500; letter-spacing: -0.01em; color: var(--text-primary); text-wrap: balance; }
+.doc-meta { margin: 0 0 6px; font-size: 12px; color: var(--text-muted); }
+.doc-page h2 { margin: 10px 0 0; font-size: 14.5px; font-weight: 500; color: var(--text-primary); }
+.doc-page p, .doc-page li { margin: 0; font-size: 14px; line-height: 1.65; color: var(--text-secondary); }
+.doc-page ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+
+/* Tasks */
+.tasks-head { flex: none; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 2px 18px 8px; }
+.tasks-head h3 { margin: 0; font-size: 14px; font-weight: 500; color: var(--text-primary); }
+.tasks-head span { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.tasks-progress { flex: none; height: 2px; margin: 0 18px 8px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.tasks-progress span { display: block; height: 100%; background: var(--accent); transition: width 0.3s var(--ease-out); }
+.tasks-list { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 2px 10px 12px; }
+.task { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px; border-radius: 8px; }
+.task:hover { background: var(--hover); }
+.task-check { width: 18px; height: 18px; border-radius: 6px; border: 1px solid var(--text-muted); display: grid; place-items: center; color: var(--background); transition: background 0.15s, border-color 0.15s, scale 0.15s var(--ease-out); }
+.task.is-done .task-check { background: var(--accent); border-color: var(--accent); }
+.task-text { font-size: 13.5px; color: var(--text-primary); }
+.task.is-done .task-text { color: var(--text-muted); text-decoration: line-through; text-decoration-color: var(--text-muted); }
+.task-meta { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+.task.is-doing .task-meta { color: var(--accent); }
+.task.is-doing .task-check { border-color: var(--accent); }

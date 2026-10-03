@@ -16,6 +16,8 @@ interface FloatingWindowProps {
   active: boolean
   /** Not the surface in front: very slightly quieter. */
   inactive: boolean
+  /** The surface in focus (only marked when several are shown). */
+  front: boolean
   /** Put away in the dock: shrinks toward it, and grows back from it. */
   minimized: boolean
   delay?: number
@@ -41,6 +43,7 @@ export function FloatingWindow({
   icon: Icon,
   active,
   inactive,
+  front,
   minimized,
   delay = 0,
   z,
@@ -118,14 +121,16 @@ export function FloatingWindow({
 
   return (
     <motion.section
-      className={`floating-window surface ${active ? 'is-active' : ''} ${dragging ? 'is-dragging' : ''} ${inactive ? 'is-inactive' : ''}`}
+      className={`floating-window surface ${active ? 'is-active' : ''} ${dragging ? 'is-dragging' : ''} ${inactive ? 'is-inactive' : ''} ${front ? 'is-front' : ''}`}
       style={{ transformOrigin: `${ox}% ${oy}%`, zIndex: z, x: dx, y: dy, pointerEvents: minimized ? 'none' : undefined }}
       onPointerDownCapture={onFocus}
-      initial={{ opacity: 0, scale: 0.6, left: r.x, top: r.y, width: r.w, height: r.h }}
+      // Entering the task: fade in, scale 0.98 → 1 and settle a few pixels.
+      // Leaving: a simple fade. Minimising shrinks it into the dock.
+      initial={{ opacity: 0, scale: 0.98, left: r.x, top: r.y + 10, width: r.w, height: r.h }}
       animate={{ opacity: minimized ? 0 : 1, scale: minimized ? 0.12 : 1, left: r.x, top: r.y, width: r.w, height: r.h }}
-      exit={{ opacity: 0, scale: 0.7, transition: { duration: 0.22, ease: ease.inOut } }}
+      exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.2, ease: ease.inOut } }}
       transition={{
-        opacity: { duration: minimized ? 0.26 : 0.26, delay: minimized ? 0 : delay },
+        opacity: { duration: minimized ? 0.26 : 0.28, delay: minimized ? 0 : delay },
         scale: { duration: minimized ? 0.3 : 0.32, ease: ease.out, delay: minimized ? 0 : delay },
         default: instant ? { duration: 0 } : { duration: 0.5, ease: ease.out },
       }}

@@ -19,7 +19,8 @@ describe('computeLayout', () => {
       const { presence, rects, mode } = computeLayout(windows, 1536, 864)
       expect(mode).toBe('desktop')
       expect(presence.x).toBeLessThan(768)
-      const list = windows.map((w) => rects[w.id])
+      const list = windows.map((w) => rects[w.id]).filter(Boolean)
+      expect(list.length).toBe(Math.min(n, 3))
       for (const r of list) {
         expect(r.x).toBeGreaterThan(presence.x)
         expect(r.x + r.w).toBeLessThanOrEqual(1536)
@@ -37,14 +38,14 @@ describe('computeLayout', () => {
     expect(rects['map-3'].y).toBeLessThan(rects['notes-2'].y)
   })
 
-  it('shows only as many surfaces as fit, always including the one in front', () => {
+  it('shows at most three surfaces (two on tablets), always including the one in front', () => {
     const kinds: ToolKind[] = ['map', 'browser', 'code', 'images', 'files', 'notes', 'terminal']
     const windows = kinds.map(win)
     for (const [W, H] of [[1536, 864], [1100, 650], [800, 700], [768, 1024]]) {
       const { rects } = computeLayout(windows, W, H)
       const list = Object.values(rects)
       expect(list.length).toBeGreaterThanOrEqual(1)
-      expect(list.length).toBeLessThanOrEqual(4)
+      expect(list.length).toBeLessThanOrEqual(W >= 1024 ? 3 : 2)
       // The newest surface is always among those shown.
       expect(rects['terminal-6']).toBeDefined()
       for (const r of list) expect(r.h).toBeGreaterThanOrEqual(140)

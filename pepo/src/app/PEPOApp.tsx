@@ -68,7 +68,7 @@ export function PEPOApp({ demo = true }: PEPOAppProps) {
       <main className="near-plane">
         <PresenceCaption text={caption} />
         <VoiceSurface />
-        {!compact && <AdaptiveDock />}
+        <AdaptiveDock compact={compact} />
       </main>
 
       {demo && (

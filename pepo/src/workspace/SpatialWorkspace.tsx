@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence } from 'framer-motion'
-import { CodeXml, Folder, Globe, Image, Map as MapIcon, MessagesSquare, NotebookPen, SquareTerminal, type LucideIcon } from 'lucide-react'
+import { CodeXml, FileText, Folder, Globe, Image, ListChecks, Map as MapIcon, MessagesSquare, NotebookPen, SquareTerminal, type LucideIcon } from 'lucide-react'
 import { pepoEvents } from '../core/events'
 import { presence } from '../core/presence'
 import { useWorkspace, workspace, type ToolKind, type WorkspaceWindow } from '../core/workspace'
@@ -8,7 +8,12 @@ import { ErrorBoundary } from '../app/ErrorBoundary'
 import { FloatingWindow } from './FloatingWindow'
 import { computeLayout, type Rect } from './layout'
 import { LightStreams } from './LightStreams'
+import { BrowserSurface, type BrowserData } from './surfaces/BrowserSurface'
+import { CodeSurface, type CodeData } from './surfaces/CodeSurface'
 import { ConversationSurface } from './surfaces/ConversationSurface'
+import { DocumentSurface, type DocumentData } from './surfaces/DocumentSurface'
+import { FilesSurface, type FilesData } from './surfaces/FilesSurface'
+import { TasksSurface, type TasksData } from './surfaces/TasksSurface'
 import { MapSurface } from './surfaces/MapSurface'
 import { EmptySurface, NotesSurface, TerminalSurface } from './surfaces/TextSurfaces'
 
@@ -20,6 +25,8 @@ const ICONS: Record<ToolKind, LucideIcon> = {
   files: Folder,
   code: CodeXml,
   images: Image,
+  documents: FileText,
+  tasks: ListChecks,
   conversation: MessagesSquare,
 }
 
@@ -31,6 +38,8 @@ const HINTS: Record<ToolKind, string> = {
   files: 'Ask PEPO to find a file.',
   code: 'Ask PEPO to open or write code.',
   images: 'Ask PEPO to show or make an image.',
+  documents: 'Ask PEPO to draft or open a document.',
+  tasks: 'Ask PEPO to keep track of something.',
   conversation: '',
 }
 
@@ -55,6 +64,16 @@ function Surface({ win }: { win: WorkspaceWindow }) {
       return d.lines ? <TerminalSurface lines={d.lines as string[]} writing={win.active} /> : <EmptySurface icon={ICONS.terminal} hint={HINTS.terminal} />
     case 'conversation':
       return <ConversationSurface />
+    case 'browser':
+      return <BrowserSurface data={d as BrowserData} />
+    case 'files':
+      return <FilesSurface data={d as FilesData} />
+    case 'code':
+      return <CodeSurface data={d as CodeData} writing={win.active} />
+    case 'documents':
+      return <DocumentSurface data={d as DocumentData} />
+    case 'tasks':
+      return <TasksSurface data={d as TasksData} onChange={(tasks) => workspace.update(win.id, { data: { tasks } })} />
     default:
       return <EmptySurface icon={ICONS[win.kind]} hint={HINTS[win.kind]} />
   }
@@ -115,9 +134,25 @@ export function SpatialWorkspace() {
         if (destination === 'home') workspace.minimizeAll()
         else if (destination === 'workspace') workspace.restoreAll()
         else if (destination === 'conversations') workspace.open('conversation', 'Conversation')
+        else if (destination === 'tasks' || destination === 'files') pepoEvents.emit('toolOpen', { toolId: destination })
       }),
     [],
   )
+
+  // Tell PEPO where a new surface appeared (the Avatar glances toward it).
+  const seen = useRef(new Set<string>())
+  useEffect(() => {
+    for (const win of visible) {
+      const r = layout.rects[win.id]
+      if (!r || seen.current.has(win.id)) continue
+      seen.current.add(win.id)
+      const vx = r.x + r.w / 2 - layout.presence.x
+      const vy = layout.presence.y - (r.y + r.h / 2)
+      const m = Math.max(Math.abs(vx), Math.abs(vy), 1)
+      pepoEvents.emit('surfaceShown', { id: win.id, dx: vx / m, dy: vy / m })
+    }
+    for (const id of seen.current) if (!windows.some((w) => w.id === id)) seen.current.delete(id)
+  }, [visible, layout, windows])
 
   // Surfaces put away keep the place they had, so they shrink into the dock from there.
   const lastRects = useRef<Record<string, Rect>>({})
@@ -153,6 +188,7 @@ export function SpatialWorkspace() {
               icon={ICONS[win.kind]}
               active={win.active}
               inactive={!win.minimized && shown.length > 1 && win.z !== topZ}
+              front={!win.minimized && shown.length > 1 && win.z === topZ}
               minimized={win.minimized}
               delay={i === shown.length - 1 ? 0.08 : 0}
               z={win.z}

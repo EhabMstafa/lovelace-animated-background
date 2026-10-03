@@ -4,6 +4,7 @@ import { pepoEvents, type PEPOEventMap } from '../core/events'
 import { presence, type PresenceState } from '../core/presence'
 import { systemStatus } from '../core/status'
 import { workspace, type ToolKind } from '../core/workspace'
+import { SAMPLE } from './sampleContent'
 
 /**
  * DEMO ONLY: a stand-in for PEPO's runtime so the visual layer can be
@@ -38,7 +39,8 @@ const TERMINAL = [
 ]
 
 const TITLES: Record<ToolKind, string> = {
-  map: 'Map', notes: 'Notes', terminal: 'Terminal', browser: 'Browser', files: 'Files', code: 'Code', images: 'Images', conversation: 'Conversation',
+  map: 'Map', notes: 'Notes', terminal: 'Terminal', browser: 'Browser', files: 'Files', code: 'Code', images: 'Images',
+  documents: 'Norway trip · plan', tasks: 'Tasks', conversation: 'Conversation',
 }
 
 type Cue = { at: number; kind: PEPOEventMap['cue']['kind'] }
@@ -110,7 +112,7 @@ export function DemoConductor() {
       later(1000, () => {
         set('thinking')
         later(1400, () => {
-          set('working', { caption: 'Working on it.' })
+          set('working', { caption: 'Working…' })
           conversation.add('tool', 'Opened Map, Notes and Terminal for the Norway route')
           // A tool the viewer already opened is reused: give it this task's title and content.
           const map = workspace.open('map', 'Norway · route', { progress: 0 })
@@ -160,7 +162,7 @@ export function DemoConductor() {
                 () => {
                   // Done. The work stays where it is: the user decides when to put it away.
                   set('success')
-                  later(1400, () => set('idle'))
+                  later(900, () => set('idle'))
                   later(4200, () => presence.update({ caption: null }))
                 },
                 REPLY_CUES,
@@ -241,7 +243,7 @@ export function DemoConductor() {
     // Tools opened from the dock: the runtime would decide what to show.
     const offTool = pepoEvents.on('toolOpen', ({ toolId }) => {
       const kind = toolId as ToolKind
-      if (TITLES[kind]) workspace.open(kind, TITLES[kind])
+      if (TITLES[kind]) workspace.open(kind, TITLES[kind], SAMPLE[kind] ?? {})
     })
 
     // Review shortcut: W runs the work scene.

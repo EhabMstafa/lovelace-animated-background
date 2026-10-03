@@ -30,7 +30,22 @@ export type AvatarState =
   | 'error'
 
 /** Conversational meaning the runtime can attach to what PEPO says. */
-export type AvatarCue = 'nod' | 'agree' | 'strongAgree' | 'question' | 'emphasis' | 'consider' | 'conclude' | 'lookLeft' | 'lookRight'
+export type AvatarCue =
+  | 'nod'
+  | 'agree'
+  | 'strongAgree'
+  | 'question'
+  | 'emphasis'
+  | 'consider'
+  | 'conclude'
+  | 'lookLeft'
+  | 'lookRight'
+  | 'understand'
+  | 'interest'
+  | 'surprise'
+  | 'empathy'
+
+const CUES: readonly string[] = ['nod', 'agree', 'strongAgree', 'question', 'emphasis', 'consider', 'conclude', 'lookLeft', 'lookRight', 'understand', 'interest', 'surprise', 'empathy']
 
 /** The pose FATHI's rig reads (same fields as FATHI's own controller). */
 export interface AvatarPose {
@@ -222,6 +237,13 @@ export function createHumanMotion(rand: () => number = Math.random) {
     })
   }
   const squint = new Spring(5, 0.9)
+  /** Brief eyelid widening (surprise) or softening (empathy), on top of the state's squint. */
+  let lidAccent = 0
+  let lidAccentUntil = -10
+  /** Movement scale: smaller screens get a little less, so nothing looks exaggerated. */
+  let scale = 1
+  /** Empathy: quieter movement for a while. */
+  let calmUntil = -10
 
   // ── Speech: jaw from audio; everything larger from phrasing ──
   let jawEnv = 0
@@ -340,6 +362,20 @@ export function createHumanMotion(rand: () => number = Math.random) {
       }
       case 'lookLeft': glanceAndReturn(-range(0.35, 0.5), range(-0.05, 0.05), range(0.8, 1.4)); break
       case 'lookRight': glanceAndReturn(range(0.35, 0.5), range(-0.05, 0.05), range(0.8, 1.4)); break
+      // Micro-expressions: barely there.
+      case 'understand': brow(range(0.06, 0.1), range(0.05, 0.09), range(0.35, 0.55)); break
+      case 'interest': brow(range(0.12, 0.18), range(0.1, 0.16), range(0.7, 1.1)); break
+      case 'surprise':
+        brow(range(0.18, 0.24), range(0.16, 0.22), range(0.5, 0.7))
+        lidAccent = -0.25
+        lidAccentUntil = time + range(0.35, 0.5)
+        break
+      case 'empathy':
+        look(range(-0.03, 0.03), -range(0.04, 0.08))
+        lidAccent = 0.08
+        lidAccentUntil = time + range(1.5, 2.5)
+        calmUntil = time + range(3, 5)
+        break
     }
   }
 
@@ -410,11 +446,21 @@ export function createHumanMotion(rand: () => number = Math.random) {
       return true
     },
     gesture(kind: string) {
-      if (reduced) return false
-      const known = ['nod', 'agree', 'strongAgree', 'question', 'emphasis', 'consider', 'conclude', 'lookLeft', 'lookRight']
-      if (!known.includes(kind)) return false
+      if (reduced || !CUES.includes(kind)) return false
       cue(kind as AvatarCue)
       return true
+    },
+    /**
+     * Glance toward something that just appeared (a surface PEPO opened),
+     * then back to the user. x, y: direction on screen, -1..1 (x right, y up).
+     */
+    lookToward(x: number, y: number) {
+      if (reduced) return
+      glanceAndReturn(clamp(x, -1, 1) * range(0.32, 0.45), clamp(y, -1, 1) * range(0.2, 0.3), range(0.6, 0.9))
+    },
+    /** Overall movement scale (1 desktop; less on small screens). */
+    setScale(k: number) {
+      scale = clamp(k, 0.4, 1)
     },
     get motion() {
       return current
@@ -554,7 +600,9 @@ export function createHumanMotion(rand: () => number = Math.random) {
       }
 
       // Brows and attentiveness.
-      squint.target = { idle: 0, attentive: 0.05, listening: 0.08, thinking: 0.12, speaking: 0.03, interrupted: 0.06, working: 0.1, waiting: 0, success: 0, error: 0.04 }[state]
+      squint.target =
+        { idle: 0, attentive: 0.05, listening: 0.08, thinking: 0.12, speaking: 0.03, interrupted: 0.06, working: 0.1, waiting: 0, success: 0, error: 0.04 }[state] +
+        (time < lidAccentUntil ? lidAccent : 0)
 
       // Head: posture + nods + following the eyes + the skull riding the jaw.
       yaw.target = posture.yaw
@@ -584,12 +632,15 @@ export function createHumanMotion(rand: () => number = Math.random) {
       const br = browR.step(dt)
       const yawNow = yaw.step(dt) + followYaw.step(dt)
       const moving = Math.abs(gazeX.v) + Math.abs(gazeY.v) > 0.08 || Math.abs(yaw.v) + Math.abs(pitch.v) + Math.abs(roll.v) > 0.004
+      // Smaller screens and empathy both mean less movement.
+      const k = scale * (time < calmUntil ? 0.7 : 1)
+      const rollNow = roll.step(dt) + sum(pulses.roll)
       current = {
-        yaw: yawNow,
+        yaw: yawNow * k,
         // The skull rides the jaw by a hair (smoothed envelope, never per syllable).
         // FATHI's rig has no lean, so leaning in reads as the chin dipping slightly.
-        pitch: pitch.step(dt) + followPitch.step(dt) + sum(pulses.pitch) + jawEnv * 0.002 + leanNow * 0.8,
-        roll: roll.step(dt) + sum(pulses.roll),
+        pitch: (pitch.step(dt) + followPitch.step(dt) + sum(pulses.pitch) + leanNow * 0.8) * k + jawEnv * 0.002,
+        roll: rollNow * k,
         jaw,
         blink,
         blinkActive: blinkCurve !== null,
@@ -597,7 +648,8 @@ export function createHumanMotion(rand: () => number = Math.random) {
         brows: [bl, br],
         squint: squint.step(dt),
         breath,
-        body: [swayX.step(dt), swayR.step(dt)],
+        // Neck and shoulders stay connected: the torso follows large head turns by a hair.
+        body: [swayX.step(dt) + yawNow * k * 0.04, swayR.step(dt) + rollNow * k * 0.12],
         gaze: [gx, gy],
         viseme: [jaw, jaw * 0.3 * (0.5 + 0.5 * Math.sin(time * 7.1)), jaw * 0.22 * (0.5 + 0.5 * Math.sin(time * 5.3 + 1))],
         bands: [0, 0, 0],

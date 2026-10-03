@@ -51,15 +51,16 @@ src/
 │  ├─ workspace.ts              workspace store: open, update, focus, close tools and their content
 │  ├─ status.ts                 status store the runtime reports to (shown on demand)
 │  ├─ conversation.ts           conversation history (turns and tool events), opened on demand
+│  ├─ contract.ts               the data/event contract in one place: usePEPOView() and pepoActions
 │  ├─ theme.ts                  dark / light theme: saved choice, else the system's
 │  └─ tokens.ts                 colours, durations, easing
 ├─ presence/
 │  ├─ PresenceLayer.tsx         the Orb's R3F canvas (demand frameloop) and FATHI's canvas above it
 │  ├─ PresenceBody.tsx          the Orb: glass, streams, orbits, stars and particles
 │  ├─ body/particleShaders.ts   the Orb's particles
-│  ├─ orb/                      state language, geometry, glass/stream/orbit/star shaders
+│  ├─ orb/                      state language, motion signals (orbMotion.ts), geometry, shaders
 │  ├─ fathi/
-│  │  ├─ fathi-avatar.js        FATHI's original renderer and rig (one added line: a controller can be passed in)
+│  │  ├─ fathi-avatar.js        FATHI's original renderer and rig (three small PEPO changes, marked "PEPO")
 │  │  ├─ humanMotion.ts         the Avatar's behaviour: natural human motion, driving FATHI's rig
 │  │  ├─ fathi-*.bin, *.json    FATHI's original geometry (cloud, depth, contour, strands)
 │  │  ├─ three.*.min.js         the Three.js build FATHI ships with (MIT, see THIRD_PARTY_NOTICES)
@@ -72,7 +73,7 @@ src/
 │  ├─ layout.ts                 where PEPO and each surface go (desktop, tablet, phone sheet)
 │  ├─ FloatingWindow.tsx        surfaces that grow from PEPO's light and collapse back to it
 │  ├─ LightStreams.tsx          particles of light from PEPO to the surface it is working on
-│  └─ surfaces/                 Map (route drawing itself), Notes, Terminal, Conversation, empty states
+│  └─ surfaces/                 Map, Notes, Terminal, Browser, Files, Code, Document, Tasks, Conversation
 ├─ voice/                       VoiceSurface, Waveform, Transcript, PresenceCaption, mic energy
 ├─ chrome/                      GlobalHeader, PresenceToggle, ThemeToggle, StatusIndicator, NavigationRail, AdaptiveDock
 ├─ background/                  AmbientBackground (a lake at night, or at dawn in the light theme)
@@ -90,11 +91,18 @@ import { presence } from './core/presence'
 pepoEvents.on('voiceStart', () => runtime.startListening())
 pepoEvents.on('textSubmit', ({ text }) => runtime.send(text))
 
-runtime.onState((s) => presence.update({ state: s }))        // idle | listening | understanding | thinking | speaking | working | waiting
+runtime.onState((s) => presence.update({ state: s }))        // idle | attentive | listening | understanding | thinking | speaking | interrupted | working | waiting | success | error
 runtime.onTranscript((t) => presence.update({ transcript: t }))
 runtime.onSay((line) => presence.update({ caption: line }))
 runtime.onAudioLevel((v) => presence.setEnergy(v))            // 0..1, read at frame rate without re-rendering
+runtime.onMeaning((kind) => pepoEvents.emit('cue', { kind })) // 'question' | 'emphasis' | 'agree' | …
 ```
+
+The same contract is gathered in `core/contract.ts`: `usePEPOView()` gives
+`presenceState`, `presentationMode`, `theme`, `isListening`, `isSpeaking`,
+`isWorking`, `isInterrupted`, `transcript` and `activeTools`.
+`pepoActions` holds `openTool`, `closeTool`, `focusTool`, `setAudioLevel`
+and the rest. `readAudioLevel()` reads the level at audio rate.
 
 Then render `<PEPOApp demo={false} />` and pass `captureMic={false}` to
 `VoiceSurface` if the runtime supplies its own audio level.
@@ -112,30 +120,46 @@ PEPO acts:
   words under it, the work below) on narrow ones, a bottom sheet on phones.
   PEPO's body always stays clear of the header and its words clear of the
   surfaces.
-- **Only what fits:** as many surfaces are shown as stay readable (up to
-  four). The one just opened or brought forward is always shown, and the
-  richest tools fill the rest; the others wait in the dock, marked with a
-  dot, until brought forward.
+- **Calm by default:** at most three surfaces are on screen (two on tablets:
+  one primary, one secondary), fewer if they wouldn't stay readable. The one
+  just opened or brought forward is always shown, and the richest tools fill
+  the rest; the others wait in the dock, marked with a dot, until brought
+  forward.
+- **Tools:** each surface has its own shape. **Browser:** address bar,
+  search results and a reader view (pages arrive as content from the
+  runtime; no third-party sites are embedded). **Files:** breadcrumb,
+  folders first, details of the selection. **Code:** one file with line
+  numbers, quiet highlighting and PEPO's edits marked. **Documents:** a
+  readable page. **Tasks:** a checklist you can tick, with what PEPO is
+  doing. Plus Map, Notes, Terminal and Conversation. Opened from the dock in
+  the demo, they show sample content (`demo/sampleContent.ts`).
 - **Light streams:** fine particles travel from PEPO to a surface when it
   appears and for as long as PEPO is writing into it, marked by a small
   pulse in the surface's label.
 - **Surfaces:** a restrained radius, a hairline border, light glass, a small
-  label, quiet minimise and close buttons, and a resize corner. No OS chrome.
-  The surface in front is fully clear; the others are very slightly quieter.
-  Timings: open ~0.3 s, close ~0.22 s, minimise ~0.3 s, focus ~0.18 s.
+  label, minimise and close buttons and a resize corner that appear on hover
+  or focus (always on touch screens). No OS chrome. The surface in focus has
+  a clearer edge and a little more depth; the others are very slightly
+  quieter. A surface enters the task with a fade, a scale from 0.98 and a
+  small settle (~0.3 s) and leaves with a plain fade (~0.2 s). Minimise
+  ~0.3 s, focus ~0.18 s.
 - **Your arrangement stays:** a surface you move or resize keeps its place
   (on screen) and its slot in PEPO's arrangement, so its neighbours don't
   jump. Double-click its header to hand it back to PEPO.
 - **Putting it away:** minimise a surface, or press Esc to put them all away
   in the dock; PEPO returns to the centre and nothing is lost. When a task
   finishes, the surfaces stay where they are until you put them away.
-- **Phones:** PEPO rises to the top, and the newest tool opens as a bottom
-  sheet with small tabs to switch between surfaces.
+- **Phones:** PEPO and the voice control come first; one small button under
+  the voice control opens the tool shelf. A tool opens as a large bottom
+  sheet with small tabs to switch between surfaces, and PEPO's line stays
+  visible above the voice control. The Avatar moves a little less on small
+  screens.
 
 The dock adapts too: pinned tools, then whatever is open or put away (a dot,
 hollow when put away), then up to two tools closed in the last ten minutes.
 **More** opens a shelf with every tool. Clicking a surface brings it to the
-front.
+front. Buttons answer a hover within ~150 ms and a press with a small
+(0.97) give, with no bounce.
 
 The runtime drives it through `workspace`:
 
@@ -179,6 +203,14 @@ transitions.
 - **success**: ordered and bright for a moment after a task, then rest
 - **error**: dimmer and slower; never an alarm
 
+On top of the state, `orbMotion.ts` adds the living parts with restraint:
+- **Breath:** a nearly imperceptible energy cycle (about 1.4% of the
+  radius) whose length varies between 5 and 9 s.
+- **Voice:** microphone and speech levels pass a noise gate, are normalised
+  and smoothed (slow attack, slower release). The Orb follows phrases, never
+  syllables, and audio stays a minority of its motion.
+- **Emphasis:** a semantic cue gives one gentle rise in light.
+
 ### Orb ↔ Avatar
 
 The Orb and the Avatar are two separate presentations of the same PEPO,
@@ -193,8 +225,10 @@ Orb.
 **Appearance:** the Avatar is FATHI as exported: its renderer, shaders,
 point cloud, depth, contour, strands and per-state lighting
 (`src/presence/fathi/fathi-avatar.js`; see `USAGE.txt`). The only change to
-that file is one line that lets a motion controller be passed in. Without
-it, FATHI uses its own controller. The geometry files are embedded in the
+that file are three small changes, each marked "PEPO": a motion controller
+can be passed in (without one, FATHI uses its own); the iris area follows
+the gaze (eyelids and socket stay put); and it redraws at 30 fps instead of
+20 while something moves (10 fps at rest, as before). The geometry files are embedded in the
 bundle and served to FATHI's own requests (`embeddedAssets.ts`), so the
 renderer runs unchanged even from a single-file build.
 
@@ -206,7 +240,11 @@ renderer runs unchanged even from a single-file build.
 - **Pointer:** while it's over FATHI.
 - **Semantic cues:** from the runtime, `pepoEvents.emit('cue', { kind })`
   with `question`, `emphasis`, `agree`, `strongAgree`, `nod`, `consider`,
-  `conclude`, `lookLeft` or `lookRight`. The demo tilts on its questions.
+  `conclude`, `lookLeft`, `lookRight`, or the micro-expressions
+  `understand`, `interest`, `surprise` and `empathy`. The demo tilts on its
+  questions.
+- **New surfaces:** when a surface appears, the Avatar glances toward it and
+  comes back to you.
 
 #### Natural human motion
 
@@ -249,24 +287,23 @@ renderer runs unchanged even from a single-file build.
   there is a small head adjustment, and then the listening posture.
 - **Success:** a settling nod. **Error:** a slow blink, a brief look down,
   a small tilt.
-
-FATHI's own drawing has no movable irises (its shader declares a gaze
-uniform but doesn't use it), so gaze shows only through the head following
-the eyes.
+- **Micro-expressions:** understanding gets a tiny brow response, interest
+  a slight lift, uncertainty a subtle asymmetry, surprise a very small
+  widening, empathy a softer gaze and quieter movement.
+- **Neck and shoulders:** the torso follows large head turns by a hair, and
+  the shoulders rise with the breath.
 
 ### Themes
 
 Dark is the night lake. Light is the same lake at dawn, with daylight glass
 surfaces and ink-blue accents. Both themes use the same CSS variables
-(`:root` and `:root[data-theme='light']` in `index.css`). PEPO's body is drawn
-in light, which would vanish on a pale sky, so in the light theme the Orb and
-FATHI are inverted with the hue turned back round: light-on-dark becomes
-ink-on-paper with the same colour families (deep cyan line work, a burnt
-orange mask, a pale glass Orb). What was white would turn black, so a
-"lighten" layer lifts the darkest ink to deep navy. The choice is saved per browser. Until the
-viewer picks a theme, it follows the system. Switching cross-fades colours
-and the background in about 300 ms; PEPO dims for a moment while its
-rendering flips. There is no flash and nothing resets.
+(`:root` and `:root[data-theme='light']` in `index.css`). PEPO keeps its own
+colours in both themes: on the light theme only contrast and saturation
+adapt, through two tokens (`--presence-orb-filter`, `--presence-avatar-filter`),
+so the same cyan and orange line work stays readable on a pale sky. The choice is saved per browser. Until the
+viewer picks a theme, it follows the system. Switching cross-fades colours,
+PEPO's contrast and the background in about 300 ms. There is no flash and
+nothing resets.
 
 ### Credits
 

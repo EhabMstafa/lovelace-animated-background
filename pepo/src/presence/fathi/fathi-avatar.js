@@ -256,6 +256,9 @@ const RIG_GLSL=`
     float browField=browX*browY*(1.0-warm);
     float sideBrow=mix(uEyes.x,uEyes.y,step(0.0,p.x));
     p.y+=sideBrow*.050*browField;
+    // PEPO: the iris area follows the gaze; the eyelids and socket stay where they are.
+    float iris=exp(-pow(length(vec2(abs(bind.x)-.305,bind.y+.015))/.05,2.0))*(1.0-warm)*eyeX;
+    p.x+=uGaze.x*.045*iris;p.y+=uGaze.y*.02*iris;
     float head=smoothstep(-1.35,-.48,bind.y);
     float torso=1.0-smoothstep(-1.30,-.78,p.y);
     float shoulder=torso*smoothstep(.34,.78,abs(p.x));
@@ -610,7 +613,7 @@ export async function createFathiAvatar(canvas, opts={}){
         canvas.dataset.avatarViseme=motion.viseme.map(x=>x.toFixed(3)).join(',');}
       const active=motion.phraseActive||motion.blinkActive;
       timer=setTimeout(()=>{timer=0;if(running&&!disposed)animate(performance.now());},
-        1000/(active?20:10));
+        1000/(active?30:10)); // PEPO: 30 fps while something moves (was 20).
     }catch(error){running=false;canvas.dataset.avatarRunning='false';
       canvas.dataset.avatarMotionError=(error&&error.message)||'motion-loop';
       console.warn('[fathi] motion loop stopped:',error);}

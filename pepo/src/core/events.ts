@@ -24,7 +24,24 @@ export interface PEPOEventMap {
    * emphasis, agreement…). The Avatar answers with a restrained gesture;
    * head motion never follows the loudness of the voice.
    */
-  cue: { kind: 'nod' | 'agree' | 'strongAgree' | 'question' | 'emphasis' | 'consider' | 'conclude' | 'lookLeft' | 'lookRight' }
+  cue: {
+    kind:
+      | 'nod'
+      | 'agree'
+      | 'strongAgree'
+      | 'question'
+      | 'emphasis'
+      | 'consider'
+      | 'conclude'
+      | 'lookLeft'
+      | 'lookRight'
+      | 'understand'
+      | 'interest'
+      | 'surprise'
+      | 'empathy'
+  }
+  /** A surface appeared on the workspace; dx, dy: its direction from PEPO (-1..1, y up). */
+  surfaceShown: { id: string; dx: number; dy: number }
   workspaceAction: { action: string; payload?: unknown }
 }
 

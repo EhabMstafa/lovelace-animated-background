@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CodeXml, Folder, Globe, Image, LayoutGrid, Map as MapIcon, MessagesSquare, NotebookPen, SquareTerminal, type LucideIcon } from 'lucide-react'
+import { CodeXml, FileText, Folder, Globe, Image, LayoutGrid, ListChecks, Map as MapIcon, MessagesSquare, NotebookPen, SquareTerminal, type LucideIcon } from 'lucide-react'
 import { pepoEvents } from '../core/events'
 import { useWorkspace, workspace } from '../core/workspace'
 import { ease } from '../core/tokens'
@@ -19,6 +19,8 @@ export const TOOLS: Record<string, DockTool> = {
   map: { id: 'map', label: 'Maps', icon: MapIcon },
   code: { id: 'code', label: 'Code', icon: CodeXml },
   images: { id: 'images', label: 'Images', icon: Image },
+  documents: { id: 'documents', label: 'Documents', icon: FileText },
+  tasks: { id: 'tasks', label: 'Tasks', icon: ListChecks },
   conversation: { id: 'conversation', label: 'Conversation', icon: MessagesSquare },
 }
 
@@ -51,6 +53,8 @@ interface AdaptiveDockProps {
   pinned?: string[]
   /** Tools PEPO considers relevant right now; they slide in after a divider. */
   relevant?: string[]
+  /** Phones: only the tool shelf button (voice stays the main way in). */
+  compact?: boolean
 }
 
 /** Opens a tool, or brings it forward (restoring it if it was put away). */
@@ -64,7 +68,8 @@ function openTool(id: string) {
  * An intelligent tool shelf, not a launcher. It carries only what is
  * useful now; everything else sits behind "More".
  */
-export function AdaptiveDock({ pinned = ['browser', 'files', 'terminal', 'notes'], relevant: suggested = [] }: AdaptiveDockProps) {
+export function AdaptiveDock({ pinned: pinnedTools = ['browser', 'files', 'terminal', 'notes'], relevant: suggested = [], compact = false }: AdaptiveDockProps) {
+  const pinned = compact ? [] : pinnedTools
   const ref = useRef<HTMLDivElement>(null)
   const [hovered, setHovered] = useState<string | null>(null)
   const [shelf, setShelf] = useState(false)
@@ -82,7 +87,7 @@ export function AdaptiveDock({ pinned = ['browser', 'files', 'terminal', 'notes'
   )
   const recentIds = recent.filter((r) => Date.now() - r.at < RECENT_MS && !openKinds.has(r.id)).map((r) => r.id).slice(0, RECENT_MAX)
   // Pinned tools, then whatever is open (or put away), then what was used recently.
-  const relevant = [...new Set([...suggested, ...windows.map((w) => w.kind as string), ...recentIds])].filter((id) => !pinned.includes(id) && TOOLS[id])
+  const relevant = compact ? [] : [...new Set([...suggested, ...windows.map((w) => w.kind as string), ...recentIds])].filter((id) => !pinned.includes(id) && TOOLS[id])
 
   useEffect(() => {
     if (!shelf) return
@@ -140,7 +145,7 @@ export function AdaptiveDock({ pinned = ['browser', 'files', 'terminal', 'notes'
   }
 
   return (
-    <div className="dock-wrap">
+    <div className={`dock-wrap ${compact ? 'is-compact' : ''}`}>
     <AnimatePresence>
       {shelf && (
         <motion.div
@@ -175,7 +180,7 @@ export function AdaptiveDock({ pinned = ['browser', 'files', 'terminal', 'notes'
         {relevant.length > 0 && <motion.span key="divider" layout className="dock-divider" />}
         {relevant.map((id) => renderTool(id, true))}
       </AnimatePresence>
-      <span className="dock-divider" />
+      {!compact && <span className="dock-divider" />}
       <motion.button
         layout
         aria-label="More tools"

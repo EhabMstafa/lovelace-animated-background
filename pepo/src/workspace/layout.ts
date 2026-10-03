@@ -13,7 +13,7 @@ export interface SpatialLayout {
 }
 
 /** Larger, richer tools take the prime position. */
-const PRIORITY = ['map', 'browser', 'code', 'images', 'files', 'notes', 'conversation', 'terminal']
+const PRIORITY = ['map', 'browser', 'documents', 'code', 'images', 'files', 'tasks', 'notes', 'conversation', 'terminal']
 
 const GAP = 14
 const HEADER = 64
@@ -38,7 +38,8 @@ const BODY_W = 0.82
  * The workspace reorganises itself around the task: with nothing open,
  * PEPO sits in the centre; as tools arrive PEPO steps aside and the
  * surfaces settle into a calm arrangement next to it. Only as many
- * surfaces as fit comfortably are shown: the one in front, then the richest.
+ * surfaces as fit comfortably are shown (at most three, two on tablets): the
+ * one in front, then the richest.
  */
 export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stage = stageSize(W, H)): SpatialLayout {
   const rects: Record<string, Rect> = {}
@@ -69,7 +70,8 @@ export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stag
     const y = HEADER - 6 + (0.5 - BODY_TOP) * stage * s
     const top = y + (BODY_BOTTOM - 0.5) * stage * s + 48
     const latest = [...windows].sort((a, b) => b.openedAt - a.openedAt)[0]
-    rects[latest.id] = { x: 10, y: top, w: W - 20, h: H - top - 112 }
+    // Room under the sheet for PEPO's line and the voice control.
+    rects[latest.id] = { x: 10, y: top, w: W - 20, h: H - top - 140 }
     for (const w of windows) if (!rects[w.id]) rects[w.id] = { ...rects[latest.id] }
     return { presence: { x: W / 2, y, scale: s }, caption: empty, rects, mode: 'sheet' }
   }
@@ -104,7 +106,10 @@ export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stag
   // How many surfaces fit without becoming unreadable.
   const rows = Math.max(1, Math.floor((region.h + GAP) / (MIN_H + GAP)))
   const cols = region.w >= 2 * 300 + GAP ? 2 : 1
-  const capacity = Math.max(1, Math.min(4, cols === 2 ? (rows >= 2 ? Math.min(4, rows * 2) : 2) : rows))
+  // Calm by default: up to three primary surfaces on desktop, two on tablets
+  // (one primary, one secondary). The rest wait in the dock.
+  const maxShown = mode === 'desktop' ? 3 : 2
+  const capacity = Math.max(1, Math.min(maxShown, cols === 2 ? (rows >= 2 ? rows * 2 : 2) : rows))
   // The surface just opened or brought forward is always shown; the richest tools fill the rest.
   const byPriority = (a: WorkspaceWindow, b: WorkspaceWindow) => PRIORITY.indexOf(a.kind) - PRIORITY.indexOf(b.kind) || a.openedAt - b.openedAt
   const front = windows.reduce((a, b) => (b.z > a.z ? b : a))

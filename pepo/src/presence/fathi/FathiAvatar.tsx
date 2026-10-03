@@ -45,6 +45,8 @@ interface FathiAvatarProps {
   preload: boolean
   state: PresenceState
   reducedMotion: boolean
+  /** Small screen: the same motion, a little smaller. */
+  compact: boolean
   /** Called once FATHI is drawn (true), or if it can't run here (false). */
   onReady: (ready: boolean) => void
 }
@@ -57,7 +59,7 @@ interface FathiAvatarProps {
  * semantic cues. It is kept alive once created and paused while hidden, so
  * switching never interrupts anything: only the presentation changes.
  */
-export function FathiAvatar({ visible, preload, state, reducedMotion, onReady }: FathiAvatarProps) {
+export function FathiAvatar({ visible, preload, state, reducedMotion, compact, onReady }: FathiAvatarProps) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const avatar = useRef<FathiInstance | null>(null)
   const controller = useRef(createHumanMotion())
@@ -117,6 +119,8 @@ export function FathiAvatar({ visible, preload, state, reducedMotion, onReady }:
     if (!a || !ready) return
     a.setState(FATHI_LIGHT[state])
     controller.current.setPresence(BEHAVIOUR[state])
+    // Understanding what was said: a tiny brow response.
+    if (state === 'understanding' && visible) controller.current.gesture('understand')
     if (!visible || (state !== 'speaking' && state !== 'listening')) {
       a.setAmplitude(0)
       return
@@ -137,6 +141,17 @@ export function FathiAvatar({ visible, preload, state, reducedMotion, onReady }:
       off()
     }
   }, [visible])
+
+  useEffect(() => controller.current.setScale(compact ? 0.75 : 1), [compact])
+
+  // A surface PEPO opens: a brief glance toward it, then back to the user.
+  useEffect(
+    () =>
+      pepoEvents.on('surfaceShown', ({ dx, dy }) => {
+        if (visible) controller.current.lookToward(dx, dy)
+      }),
+    [visible],
+  )
 
   // FATHI notices the pointer while it is over him.
   useEffect(() => {

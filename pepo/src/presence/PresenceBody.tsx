@@ -13,7 +13,9 @@ import {
   type ParticleCounts,
 } from './orb/geometry'
 import { glowFragment, glowVertex, orbitFragment, skinFragment, skinVertex, starFragment, starVertex, streamFragment } from './orb/shaders'
+import { createOrbMotion } from './orb/orbMotion'
 import { MORPH_TAU, ORB_STATES, PARAM_KEYS, type OrbParams } from './orb/stateParams'
+import { pepoEvents } from '../core/events'
 
 interface OrbitSpec {
   r: [number, number]
@@ -76,11 +78,14 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
   /** Layers that exist only in the Orb; hidden (not drawn) in the Avatar. */
   const orbOnly = useRef<(THREE.Object3D | null)[]>([])
   const keep = (i: number) => (el: THREE.Object3D | null) => void (orbOnly.current[i] = el)
-  const { gl, size } = useThree()
+  const { gl, size, invalidate } = useThree()
   const pixelRatio = gl.getPixelRatio()
 
   const params = useRef<OrbParams>({ ...ORB_STATES.idle })
   const clock = useRef({ t: 0, rot: 0, flow: 0, energy: 0, morph: 0 })
+  // Breath, voice envelopes and emphasis: the Orb's living signals (orbMotion.ts).
+  const orbMotion = useMemo(() => createOrbMotion(), [])
+  useEffect(() => pepoEvents.on('cue', ({ kind }) => orbMotion.cue(kind)), [orbMotion])
 
   // ── Geometry ──
   const particleGeo = useMemo(() => createOrbParticles(counts), [counts])
@@ -109,6 +114,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       uFlow: { value: 0 },
       uScale: { value: 1 },
       uOrbBreath: { value: 0 },
+      uBreathWave: { value: 0 },
       uConverge: { value: 0 },
       uDepth: { value: 0 },
       uViolet: { value: 0 },
@@ -250,9 +256,10 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       p[key] = damp(p[key], target[key], tau, dt)
     }
 
-    // Energy: quick attack, slow release, so speech fades out gently.
-    const e = presence.getEnergy()
-    c.energy = damp(c.energy, e, e > c.energy ? 0.06 : 0.35, dt)
+    // Voice: gated, normalised and smoothed to phrase level, so the Orb never
+    // pulses with syllables and audio stays a minority of its motion.
+    const sig = orbMotion.step(dt * timeScale, state, presence.getEnergy())
+    c.energy = state === 'speaking' ? sig.speak : sig.listen
 
     c.t += dt * timeScale
     c.rot += dt * timeScale * p.spin * Math.PI * 2 * 0.25
@@ -263,6 +270,9 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     const step = dt / (reducedMotion ? SWITCH_SECONDS * 0.6 : SWITCH_SECONDS)
     c.morph = morphTarget > c.morph ? Math.min(1, c.morph + step) : Math.max(0, c.morph - step)
     const m = c.morph
+    // The canvas pauses while the Avatar is shown; until the Orb has fully
+    // faded (or come back), keep drawing so it never freezes half-visible.
+    if (m !== morphTarget) invalidate()
     // One presentation leaves, then the other arrives: the Orb is gone within
     // the first ~0.2 s, while FATHI fades in over the last ~0.2 s.
     const orbVisible = 1 - THREE.MathUtils.smoothstep(m, 0, 0.55)
@@ -276,13 +286,14 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     u.uFlow.value = c.flow
     u.uScale.value = p.scale
     u.uOrbBreath.value = reducedMotion ? p.breath * 0.4 : p.breath
+    u.uBreathWave.value = sig.breath
     u.uConverge.value = p.converge
     u.uDepth.value = p.depth
     u.uViolet.value = p.violet
     u.uListen.value = p.listen
     u.uSpeak.value = p.speak
     u.uEnergy.value = c.energy
-    u.uGlow.value = p.glow
+    u.uGlow.value = p.glow * (1 + sig.emphasis)
 
     if (spinGroup.current) {
       spinGroup.current.rotation.y = c.rot
