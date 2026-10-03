@@ -100,10 +100,10 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
 
   // ── Geometry ──
   const particleGeo = useMemo(() => createOrbParticles(counts), [counts])
-  const streamGeo = useMemo(() => createRibbonGeometry(createStreams(3, 5, 11, 0.88, 0.98)), [])
+  const streamGeo = useMemo(() => createRibbonGeometry(createStreams(3, 6, 11, 0.86, 0.98)), [])
   const innerStreamGeo = useMemo(() => createRibbonGeometry(createStreams(2, 4, 23, 0.5, 0.7, 90)), [])
   const orbitGeos = useMemo(() => ORBITS.map((o) => createRibbonGeometry([ellipsePoints(o.r[0], o.r[1])], true)), [])
-  const starGeo = useMemo(() => createStarNodes(9, 5), [])
+  const starGeo = useMemo(() => createStarNodes(14, 5), [])
   const nodeGeo = useMemo(() => {
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3))
@@ -232,7 +232,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
         uTint: { value: new THREE.Color(tint) },
       },
     })
-  const starMat = useMemo(() => makeStarMat(34, '#4BC8FF'), [pixelRatio])
+  const starMat = useMemo(() => makeStarMat(40, '#4BC8FF'), [pixelRatio])
   const nodeMats = useMemo(() => ORBITS.map((o) => makeStarMat(26, o.tint)), [pixelRatio])
 
   const skinMat = useMemo(

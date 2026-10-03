@@ -83,8 +83,8 @@ button:focus-visible, input:focus-visible { outline: 1px solid rgba(75, 200, 255
   height: 30vh;
   transform: translateX(-50%);
   background:
-    radial-gradient(ellipse 50% 100% at 50% 0%, rgba(110, 190, 255, 0.26), transparent 70%),
-    repeating-linear-gradient(180deg, rgba(150, 210, 255, 0.1) 0 1px, transparent 1px 6px);
+    radial-gradient(ellipse 50% 100% at 50% 0%, rgba(120, 200, 255, 0.42), transparent 72%),
+    repeating-linear-gradient(180deg, rgba(170, 220, 255, 0.16) 0 1px, transparent 1px 6px);
   -webkit-mask-image: radial-gradient(ellipse 50% 100% at 50% 0%, #000 0%, transparent 75%);
   mask-image: radial-gradient(ellipse 50% 100% at 50% 0%, #000 0%, transparent 75%);
   filter: blur(1.5px);

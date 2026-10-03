@@ -20,7 +20,7 @@ export const traceVertex = /* glsl */ `
     float speechGlow = (1.0 + uJaw * .06 * aWarm) * mix(uPresence.x, uPresence.y, aWarm);
     vAlpha = aStrength * (.55 + .45 * depth) * smoothstep(-1.96, -1.74, position.y) * finish.x * speechGlow * 1.08
            * (1.0 + lip * (.24 + uJaw * .15)) * mix(1.0, 0.6, aWarm);
-    vColor = avatarColor(position, finish.y, lip * 0.5);
+    vColor = avatarColor(position, finish.y, lip * 0.5, vec3(0.7, 0.0, 0.25));
     vT = aProgress;
   }
 `

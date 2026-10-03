@@ -63,9 +63,10 @@ export const skinFragment = /* glsl */ `
 
     vec3 rim = rimLight(sn, uViolet);
     // The glass: dark at the heart, blue light gathering towards the rim.
-    vec3 body = mix(C_DEEP, C_BLUE, 0.3) * (0.035 + 0.3 * pow(edge, 1.6)) * (1.0 + 0.5 * uDepth);
-    float inner = smoothstep(0.2, 1.0, dot(sn, normalize(vec2(-0.62, -0.78)))) * pow(edge, 1.1);
-    body += C_SKY * inner * 0.22;
+    // A filled, luminous glass body: deep at the heart, bright blue toward the rim.
+    vec3 body = mix(C_DEEP, C_BLUE, 0.35) * (0.07 + 0.5 * pow(edge, 1.4)) * (1.0 + 0.5 * uDepth);
+    float inner = smoothstep(0.1, 1.0, dot(sn, normalize(vec2(-0.62, -0.78)))) * pow(edge, 0.9);
+    body += C_SKY * inner * 0.32;
     body += C_VIOLET * 0.1 * uViolet * smoothstep(0.3, 1.0, dot(sn, VIOLET_DIR2)) * edge;
     // A slow nebula drifting inside the glass.
     float neb = fbm(vPos * 2.2 + vec3(0.0, uTime * 0.025, uTime * 0.015));
@@ -77,7 +78,14 @@ export const skinFragment = /* glsl */ `
     // The point where the Orb meets the horizon catches the most light.
     float contact = smoothstep(0.86, 1.0, -sn.y) * rimHard;
 
-    vec3 col = body + rim * (rimSoft * 0.55 + band * 0.35 + rimHard * 1.15) + C_WHITE * contact * 0.35;
+    // Glass reflections: a crisp highlight upper left, a broad sheen, and a
+    // violet glint on the right, so the Orb reads as a sphere, not a ring.
+    vec3 R = reflect(vec3(0.0, 0.0, -1.0), normalize(vNormal));
+    float key = max(dot(R, normalize(vec3(-0.62, 0.74, 0.25))), 0.0);
+    float glint = max(dot(R, normalize(vec3(0.95, 0.22, 0.2))), 0.0);
+    vec3 reflections = C_WHITE * pow(key, 160.0) * 0.7 + C_SKY * pow(key, 6.0) * 0.08 + C_LILAC * pow(glint, 120.0) * 0.4;
+
+    vec3 col = body + rim * (rimSoft * 0.7 + band * 0.45 + rimHard * 1.2) + C_WHITE * contact * 0.35 + reflections;
     col += mix(C_CYAN, C_WHITE, 0.4) * pow(facing, 5.0) * uSpeak * 0.18;
     // Alpha lets the glass hold back the landscape behind it, and lets go
     // completely when PEPO wears its face.
@@ -114,7 +122,7 @@ export const glowFragment = /* glsl */ `
     vec3 c = rimLight(sn, uViolet);
     vec3 deep = mix(C_DEEP, C_BLUE, 0.3);
     float orb = uFade;
-    float a = bloom * 0.4 * orb + halo * 0.2 * orb + wide * (0.12 + 0.1 * orb);
+    float a = bloom * 0.45 * orb + halo * 0.32 * orb + wide * (0.12 + 0.16 * orb);
     vec3 col = mix(deep, c, clamp(bloom + halo * 0.6, 0.0, 1.0) * orb);
     // Contact flare under the Orb.
     float flare = exp(-pow(p.x / (r * 0.42), 2.0) - pow((p.y + r * 1.01) / (r * 0.045), 2.0));

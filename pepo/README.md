@@ -124,10 +124,14 @@ motion controller are ported with their tuning intact:
 - **Jaw:** only speech output opens it. Microphone energy brightens the face
   but never moves the mouth.
 
-The colours follow the Orb's light rig: cyan where the light enters (lower
-left), electric blue across the body, violet gathering toward the upper
-right, and a white crown highlight. The mask is lilac instead of the original
-orange, and thinking adds violet, as it does in the Orb. Parallax is kept
+Every point also carries a surface normal, estimated at bake time from a
+smoothed height field of FATHI's depth. The renderer lights the artwork as a
+3D relief: a key light from the upper left that turns with the head, specular
+highlights, and bright relief edges. The palette is saturated and kept low in
+red, so dense additive light stays blue instead of washing out to white:
+electric blue in shadow, azure in light, and vivid cyan where the light lands.
+The mask is luminous ice (a silver-cyan) instead of the original orange.
+Thinking adds a touch of violet, as it does in the Orb. Parallax is kept
 small because the artwork is a shallow relief.
 
 ### Credits

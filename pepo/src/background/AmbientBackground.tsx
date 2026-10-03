@@ -70,9 +70,9 @@ function paint(canvas: HTMLCanvasElement) {
   // Dusk: a thin warm band at the horizon under a violet veil. Human warmth, held low.
   const dusk = ctx.createLinearGradient(0, hy - h * 0.2, 0, hy)
   dusk.addColorStop(0, 'rgba(110,80,170,0)')
-  dusk.addColorStop(0.6, 'rgba(110,80,170,0.10)')
-  dusk.addColorStop(0.9, 'rgba(214,140,120,0.13)')
-  dusk.addColorStop(1, 'rgba(240,170,130,0.16)')
+  dusk.addColorStop(0.55, 'rgba(110,80,170,0.12)')
+  dusk.addColorStop(0.88, 'rgba(214,140,120,0.22)')
+  dusk.addColorStop(1, 'rgba(244,176,134,0.3)')
   ctx.fillStyle = dusk
   ctx.fillRect(0, hy - h * 0.2, w, h * 0.2)
 
@@ -83,7 +83,7 @@ function paint(canvas: HTMLCanvasElement) {
   const crop = (span - w) / 2
   const mh = Math.min(h, span * 0.62)
   const layers = [
-    { seed: 3, height: mh * 0.2, rough: 0.8, valley: 1.2, top: '#1C2B55', bottom: '#0E1A38', crest: 'rgba(170,190,255,0.10)' },
+    { seed: 3, height: mh * 0.2, rough: 0.8, valley: 1.2, top: '#26386A', bottom: '#121F42', crest: 'rgba(190,205,255,0.16)' },
     { seed: 9, height: mh * 0.27, rough: 1, valley: 1.5, top: '#111D3E', bottom: '#070F24', crest: 'rgba(150,180,255,0.08)' },
   ]
   const silhouettes: Float32Array[] = []
@@ -112,8 +112,8 @@ function paint(canvas: HTMLCanvasElement) {
 
   // Lake
   const lake = ctx.createLinearGradient(0, hy, 0, h)
-  lake.addColorStop(0, '#0B1633')
-  lake.addColorStop(0.35, '#060D20')
+  lake.addColorStop(0, '#13204A')
+  lake.addColorStop(0.35, '#08112A')
   lake.addColorStop(1, '#030812')
   ctx.fillStyle = lake
   ctx.fillRect(0, hy, w, h - hy)

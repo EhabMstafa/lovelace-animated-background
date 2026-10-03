@@ -32,6 +32,7 @@ export const bodyVertex = /* glsl */ `
   attribute float aKind;     // orb: 0 shell, 1 inner, 2 halo, 3 latent (hidden in the Orb)
   attribute vec3 aAxis;
   attribute vec3 aFace;      // avatar position (FATHI units)
+  attribute vec3 aFaceN;     // avatar relief normal
   attribute float aFaceKind; // avatar: 0 cool line work … 1 warm (mask)
   attribute float aFaceW;    // avatar: artwork weight
 
@@ -103,14 +104,20 @@ export const bodyVertex = /* glsl */ `
     vec3 p = rigPosition(bind, warm);
     mv = modelViewMatrix * vec4(faceToWorld(p), 1.0);
 
+    // The relief turns with the head, so its light moves with it.
+    float headW = smoothstep(-1.35, -.48, bind.y);
+    vec3 n = normalize(aFaceN + vec3(uHead.x, -uHead.y, 0.0) * headW * vec3(1.0, 1.0, 0.0));
+    vec3 light = reliefLight(n);
+
     float depth = smoothstep(-0.3, 0.45, bind.z);
     vec2 finish = finishAt(bind, warm);
     float lip = lipTrace(bind) * warm;
     float speechGlow = (1.0 + uJaw * .06 * warm) * mix(uPresence.x, uPresence.y, warm);
-    alpha = aFaceW * (0.55 + 0.45 * depth) * 0.96 * smoothstep(-1.96, -1.74, bind.y)
+    float shade = 0.4 + 0.85 * light.x + 0.45 * light.z + 0.5 * light.y;
+    alpha = aFaceW * (0.5 + 0.5 * depth) * 0.82 * shade * smoothstep(-1.96, -1.74, bind.y)
           * finish.x * speechGlow * (1.0 + lip * (.65 + uJaw * .22));
-    color = avatarColor(bind, finish.y, lip);
-    size = 0.8 + 0.3 * aSeed.y;
+    color = avatarColor(bind, finish.y, lip, light);
+    size = 0.85 + 0.35 * aSeed.y;
   }
 
   void main() {

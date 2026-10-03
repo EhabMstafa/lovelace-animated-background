@@ -9,9 +9,13 @@
  * draws in motion (hash < 0.20 + 0.30·weight), adds the ear-bridge dust, and
  * flattens the visible strands into segments.
  *
+ * It also estimates a surface normal for every point from FATHI's depth
+ * (a smoothed height field over the whole cloud), so the renderer can light
+ * the relief like a 3D form.
+ *
  * Output: src/presence/avatar/assets/fathi.bin (little-endian)
- *   char[4] 'PFA1', u32 pointCount, u32 segmentCount, f32 Q
- *   points:   i16 x, y, z (× 1/Q), u8 weight, u8 warm
+ *   char[4] 'PFA2', u32 pointCount, u32 segmentCount, f32 Q
+ *   points:   i16 x, y, z (× 1/Q), u8 weight, u8 warm, i8 nx, ny, nz (× 1/127), u8 pad
  *   segments: i16 ax, ay, az, bx, by, bz (× 1/Q),
  *             u8 strengthA, u8 strengthB, u8 progressA, u8 progressB, u8 warm, u8 kind
  * Kinds: 0 neck-flow, 1 throat, 2 shoulder-link, 3 jaw-guide.
@@ -32,6 +36,59 @@ const N = cloud.getUint32(4, true)
 const depth = view('fathi-depth.bin')
 const contour = view('fathi-contour.bin')
 const strands = JSON.parse(fs.readFileSync(path.join(dir, 'fathi-strands.json'), 'utf8'))
+
+// ── Height field of the relief, from every source point ──
+const RES = 0.012, X0 = -1.65, Y0 = -2.0, GW = Math.ceil(3.3 / RES), GH = Math.ceil(3.1 / RES)
+const zSum = new Float64Array(GW * GH), zW = new Float64Array(GW * GH)
+for (let i = 0; i < N; i++) {
+  const x = contour.getFloat32(40 + i * 8, true), y = contour.getFloat32(44 + i * 8, true)
+  const gi = Math.floor((x - X0) / RES), gj = Math.floor((y - Y0) / RES)
+  if (gi < 0 || gj < 0 || gi >= GW || gj >= GH) continue
+  zSum[gj * GW + gi] += depth.getFloat32(40 + i * 4, true)
+  zW[gj * GW + gi] += 1
+}
+let field = new Float64Array(GW * GH)
+let known = new Uint8Array(GW * GH)
+for (let k = 0; k < field.length; k++) if (zW[k] > 0) { field[k] = zSum[k] / zW[k]; known[k] = 1 }
+// Fill gaps by diffusion so the field is continuous between the drawn lines.
+for (let it = 0; it < 60; it++) {
+  const next = field.slice()
+  for (let j = 1; j < GH - 1; j++) for (let i = 1; i < GW - 1; i++) {
+    const k = j * GW + i
+    if (known[k]) continue
+    next[k] = (field[k - 1] + field[k + 1] + field[k - GW] + field[k + GW]) / 4
+  }
+  field = next
+}
+// Smooth: the relief, not the pen strokes, should decide the light.
+const blur = (src, r) => {
+  const w = []
+  for (let d = -r; d <= r; d++) w.push(Math.exp(-(d * d) / (2 * (r / 2) ** 2)))
+  const pass = (a, horizontal) => {
+    const out = new Float64Array(a.length)
+    for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) {
+      let s = 0, ws = 0
+      for (let d = -r; d <= r; d++) {
+        const ii = horizontal ? i + d : i, jj = horizontal ? j : j + d
+        if (ii < 0 || jj < 0 || ii >= GW || jj >= GH) continue
+        s += a[jj * GW + ii] * w[d + r]; ws += w[d + r]
+      }
+      out[j * GW + i] = s / ws
+    }
+    return out
+  }
+  return pass(pass(src, true), false)
+}
+field = blur(field, 6)
+const RELIEF = 2.6 // exaggerate the shallow relief for lighting only
+const normalAt = (x, y) => {
+  const gi = Math.min(GW - 2, Math.max(1, Math.round((x - X0) / RES)))
+  const gj = Math.min(GH - 2, Math.max(1, Math.round((y - Y0) / RES)))
+  const dx = (field[gj * GW + gi + 1] - field[gj * GW + gi - 1]) / (2 * RES) * RELIEF
+  const dy = (field[(gj + 1) * GW + gi] - field[(gj - 1) * GW + gi]) / (2 * RES) * RELIEF
+  const l = Math.hypot(dx, dy, 1)
+  return [-dx / l, -dy / l, 1 / l]
+}
 
 const points = []
 for (let i = 0; i < N; i++) {
@@ -75,8 +132,8 @@ for (const p of strands.paths) {
 }
 
 const Q = 16384
-const buf = Buffer.alloc(16 + points.length * 8 + segs.length * 18)
-buf.write('PFA1', 0, 'ascii')
+const buf = Buffer.alloc(16 + points.length * 12 + segs.length * 18)
+buf.write('PFA2', 0, 'ascii')
 buf.writeUInt32LE(points.length, 4)
 buf.writeUInt32LE(segs.length, 8)
 buf.writeFloatLE(Q, 12)
@@ -85,6 +142,8 @@ for (const [x, y, z, w, warm] of points) {
   for (const v of [x, y, z]) { buf.writeInt16LE(Math.round(v * Q), o); o += 2 }
   buf.writeUInt8(w, o++)
   buf.writeUInt8(warm, o++)
+  for (const v of normalAt(x, y)) buf.writeInt8(Math.round(v * 127), o++)
+  o++
 }
 for (const s of segs) {
   for (let k = 0; k < 6; k++) { buf.writeInt16LE(Math.round(s[k] * Q), o); o += 2 }
