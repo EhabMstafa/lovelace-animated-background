@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { usePresence } from '../core/presence'
 import { useReducedMotion } from '../hooks/useReducedMotion'
 import { FrameGovernor } from './FrameGovernor'
+import { QualityGovernor } from './QualityGovernor'
 import { PresenceBody } from './PresenceBody'
 
 const CALM_STATES = new Set(['idle', 'waiting'])
@@ -42,6 +43,7 @@ export function PresenceLayer({ compact = false }: { compact?: boolean }) {
         camera={{ fov: 32, position: [0, 0, 8.2], near: 0.1, far: 50 }}
       >
         <FrameGovernor fps={fps} />
+        <QualityGovernor fps={fps} />
         <PresenceBody state={state} form={form} reducedMotion={reducedMotion} counts={counts} />
       </Canvas>
     </div>

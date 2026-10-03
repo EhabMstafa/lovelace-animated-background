@@ -12,6 +12,8 @@ interface FloatingWindowProps {
   icon: LucideIcon
   active: boolean
   delay?: number
+  z: number
+  onFocus: () => void
   onClose: () => void
   children: ReactNode
 }
@@ -21,7 +23,7 @@ interface FloatingWindowProps {
  * a whisper of glass. No title bar chrome: a small label, a quiet close,
  * and the header as a drag handle.
  */
-export function FloatingWindow({ rect, origin, title, icon: Icon, active, delay = 0, onClose, children }: FloatingWindowProps) {
+export function FloatingWindow({ rect, origin, title, icon: Icon, active, delay = 0, z, onFocus, onClose, children }: FloatingWindowProps) {
   const drag = useDragControls()
   const [dragging, setDragging] = useState(false)
   // The surface grows from the point nearest PEPO.
@@ -31,7 +33,8 @@ export function FloatingWindow({ rect, origin, title, icon: Icon, active, delay 
   return (
     <motion.section
       className={`floating-window surface ${active ? 'is-active' : ''} ${dragging ? 'is-dragging' : ''}`}
-      style={{ transformOrigin: `${ox}% ${oy}%` }}
+      style={{ transformOrigin: `${ox}% ${oy}%`, zIndex: z }}
+      onPointerDownCapture={onFocus}
       initial={{ opacity: 0, scale: 0.4, filter: 'blur(12px)', left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
       animate={{ opacity: 1, scale: 1, filter: 'blur(0px)', left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
       exit={{ opacity: 0, scale: 0.45, filter: 'blur(10px)', transition: { duration: 0.34, ease: ease.inOut } }}

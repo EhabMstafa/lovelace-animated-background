@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { CodeXml, Folder, Globe, Image, LayoutGrid, Map as MapIcon, NotebookPen, SquareTerminal, type LucideIcon } from 'lucide-react'
 import { pepoEvents } from '../core/events'
+import { useWorkspace, workspace } from '../core/workspace'
 import { ease } from '../core/tokens'
 
 export interface DockTool {
@@ -15,7 +16,7 @@ export const TOOLS: Record<string, DockTool> = {
   files: { id: 'files', label: 'Files', icon: Folder },
   terminal: { id: 'terminal', label: 'Terminal', icon: SquareTerminal },
   notes: { id: 'notes', label: 'Notes', icon: NotebookPen },
-  maps: { id: 'maps', label: 'Maps', icon: MapIcon },
+  map: { id: 'map', label: 'Maps', icon: MapIcon },
   code: { id: 'code', label: 'Code', icon: CodeXml },
   images: { id: 'images', label: 'Images', icon: Image },
 }
@@ -47,13 +48,44 @@ interface AdaptiveDockProps {
   relevant?: string[]
 }
 
+/** Opens a tool, or brings it forward if it is already on the workspace. */
+function openTool(id: string) {
+  pepoEvents.emit('toolOpen', { toolId: id })
+  const open = workspace.getSnapshot().find((w) => w.kind === id)
+  if (open) workspace.focus(open.id)
+}
+
 /**
  * An intelligent tool shelf, not a launcher. It carries only what is
  * useful now; everything else sits behind "More".
  */
-export function AdaptiveDock({ pinned = ['browser', 'files', 'terminal', 'notes'], relevant = [] }: AdaptiveDockProps) {
+export function AdaptiveDock({ pinned = ['browser', 'files', 'terminal', 'notes'], relevant: suggested = [] }: AdaptiveDockProps) {
   const ref = useRef<HTMLDivElement>(null)
   const [hovered, setHovered] = useState<string | null>(null)
+  const [shelf, setShelf] = useState(false)
+  const windows = useWorkspace()
+  const openKinds = new Set(windows.map((w) => w.kind as string))
+  // Whatever PEPO has open that isn't pinned joins the shelf for as long as it's open.
+  const relevant = [...new Set([...suggested, ...windows.map((w) => w.kind as string)])].filter((id) => !pinned.includes(id) && TOOLS[id])
+
+  useEffect(() => {
+    if (!shelf) return
+    const close = (e: Event) => {
+      if (e instanceof KeyboardEvent) {
+        if (e.key !== 'Escape') return
+        // This Escape is ours: don't let it also put the workspace away.
+        e.stopPropagation()
+      }
+      if (e instanceof PointerEvent && ref.current?.parentElement?.contains(e.target as Node)) return
+      setShelf(false)
+    }
+    window.addEventListener('keydown', close, true)
+    window.addEventListener('pointerdown', close)
+    return () => {
+      window.removeEventListener('keydown', close, true)
+      window.removeEventListener('pointerdown', close)
+    }
+  }, [shelf])
 
   const onMove = (e: React.PointerEvent) => {
     const el = ref.current
@@ -70,13 +102,13 @@ export function AdaptiveDock({ pinned = ['browser', 'files', 'terminal', 'notes'
       <motion.button
         key={id}
         layout
-        className="dock-item"
+        className={`dock-item ${openKinds.has(id) ? 'is-open' : ''}`}
         aria-label={tool.label}
         onPointerEnter={() => setHovered(id)}
         onPointerLeave={() => setHovered((h) => (h === id ? null : h))}
         onFocus={() => setHovered(id)}
         onBlur={() => setHovered(null)}
-        onClick={() => pepoEvents.emit('toolOpen', { toolId: id })}
+        onClick={() => openTool(id)}
         initial={transient ? { opacity: 0, scale: 0.6 } : false}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.6 }}
@@ -86,12 +118,41 @@ export function AdaptiveDock({ pinned = ['browser', 'files', 'terminal', 'notes'
           <Icon size={19} strokeWidth={1.35} />
         </span>
         <Tip show={hovered === id} label={tool.label} />
-        {transient && <span className="dock-relevance" aria-hidden="true" />}
+        {(transient || openKinds.has(id)) && <span className="dock-relevance" aria-hidden="true" />}
       </motion.button>
     )
   }
 
   return (
+    <div className="dock-wrap">
+    <AnimatePresence>
+      {shelf && (
+        <motion.div
+          className="tool-shelf surface"
+          role="menu"
+          aria-label="All tools"
+          initial={{ opacity: 0, y: 8, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 6, scale: 0.98 }}
+          transition={{ duration: 0.22, ease: ease.out }}
+        >
+          {Object.values(TOOLS).map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              role="menuitem"
+              className={openKinds.has(id) ? 'is-open' : ''}
+              onClick={() => {
+                openTool(id)
+                setShelf(false)
+              }}
+            >
+              <Icon size={18} strokeWidth={1.35} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </motion.div>
+      )}
+    </AnimatePresence>
     <motion.div layout ref={ref} className="dock surface" onPointerMove={onMove} role="toolbar" aria-label="Tools">
       {pinned.map((id) => renderTool(id))}
       <AnimatePresence initial={false}>
@@ -101,17 +162,22 @@ export function AdaptiveDock({ pinned = ['browser', 'files', 'terminal', 'notes'
       <span className="dock-divider" />
       <motion.button
         layout
-        className="dock-item"
         aria-label="More tools"
+        aria-expanded={shelf}
+        className={`dock-item ${shelf ? 'is-open' : ''}`}
         onPointerEnter={() => setHovered('more')}
         onPointerLeave={() => setHovered(null)}
-        onClick={() => pepoEvents.emit('workspaceAction', { action: 'openToolLibrary' })}
+        onClick={() => {
+          setShelf((v) => !v)
+          pepoEvents.emit('workspaceAction', { action: 'openToolLibrary' })
+        }}
       >
         <span className="dock-icon">
           <LayoutGrid size={17} strokeWidth={1.35} />
         </span>
-        <Tip show={hovered === 'more'} label="More" />
+        <Tip show={hovered === 'more' && !shelf} label="More" />
       </motion.button>
     </motion.div>
+    </div>
   )
 }

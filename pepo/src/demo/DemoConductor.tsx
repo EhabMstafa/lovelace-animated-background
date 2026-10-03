@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { pepoEvents } from '../core/events'
 import { presence, type PresenceState } from '../core/presence'
+import { systemStatus } from '../core/status'
 import { workspace, type ToolKind } from '../core/workspace'
 
 /**
@@ -210,6 +211,16 @@ export function DemoConductor() {
     }
     window.addEventListener('keydown', onKey)
 
+    // Status the runtime would report (demo values), following the presence.
+    const report = () => {
+      const s = presence.getSnapshot().state
+      systemStatus.setService('Speech recognition', s === 'listening' ? 'busy' : 'ready', s === 'listening' ? 'Listening' : 'Ready')
+      systemStatus.setService('Language model', s === 'thinking' || s === 'understanding' || s === 'working' ? 'busy' : 'ready', s === 'working' ? 'Using tools' : s === 'thinking' || s === 'understanding' ? 'Thinking' : 'Local · ready')
+      systemStatus.setService('Voice', s === 'speaking' ? 'busy' : 'ready', s === 'speaking' ? 'Speaking' : 'Ready')
+    }
+    report()
+    const offStatus = presence.subscribe(report)
+
     // First breath: PEPO acknowledges you once, then falls silent.
     later(1400, () => presence.update({ caption: "I'm here." }))
     later(6500, () => {
@@ -222,6 +233,7 @@ export function DemoConductor() {
       offStop()
       offText()
       offTool()
+      offStatus()
       window.removeEventListener('keydown', onKey)
     }
   }, [])

@@ -15,6 +15,7 @@ cd pepo
 npm install
 npm run dev      # http://localhost:5173
 npm run build    # typecheck + production build into dist/
+npm test         # unit tests: workspace layout and store, human motion ranges
 ```
 
 ## Trying it
@@ -24,7 +25,9 @@ npm run build    # typecheck + production build into dist/
 | Click the mic, or press **Space** | Listen. A demo transcript plays, then PEPO understands, thinks and answers in whichever form is selected |
 | Press **/**, or click the keyboard icon | Type instead of talking |
 | Say or type "plan a trip to Norway", or press **W** | The work scene: PEPO steps aside and opens a map, notes and a terminal |
-| Click a tool in the dock | Opens that tool as a surface |
+| Click a tool in the dock | Opens that tool as a surface, or brings it forward if it's open |
+| Click **More** in the dock | A shelf with every tool |
+| Click **Local** in the header | Status on demand: where PEPO runs, privacy, each service |
 | Press **Esc** (when not listening or typing) | Puts the work away; PEPO returns to the centre |
 | Press **1–7**, or use the state label in the corner | Jump straight to a presence state for review |
 | **Orb / Avatar** toggle in the header, or press **A** | Choose which body PEPO wears (remembered per browser); switching cross-fades between them |
@@ -41,7 +44,8 @@ src/
 ├─ core/
 │  ├─ presence.ts               presence store: state, form, energy, caption, transcript
 │  ├─ events.ts                 UI intents: voiceStart, voiceStop, textSubmit, toolOpen…
-│  ├─ workspace.ts              workspace store: open, update, close tools and their content
+│  ├─ workspace.ts              workspace store: open, update, focus, close tools and their content
+│  ├─ status.ts                 status store the runtime reports to (shown on demand)
 │  └─ tokens.ts                 colours, durations, easing
 ├─ presence/
 │  ├─ PresenceLayer.tsx         R3F canvas (demand frameloop, paced by FrameGovernor)
@@ -62,7 +66,7 @@ src/
 │  ├─ LightStreams.tsx          particles of light from PEPO to the surface it is working on
 │  └─ surfaces/                 Map (route drawing itself), Notes, Terminal, empty states
 ├─ voice/                       VoiceSurface, Waveform, Transcript, PresenceCaption, mic energy
-├─ chrome/                      GlobalHeader, PresenceToggle, NavigationRail, AdaptiveDock
+├─ chrome/                      GlobalHeader, PresenceToggle, StatusIndicator, NavigationRail, AdaptiveDock
 ├─ background/                  AmbientBackground (night lake at ~5–10% intensity)
 └─ demo/                        DemoConductor + StatePicker (remove when the runtime connects)
 ```
@@ -107,6 +111,10 @@ PEPO acts:
 - **Phones:** PEPO rises to the top, and the newest tool opens as a bottom
   sheet with small tabs to switch between surfaces.
 
+The dock adapts too: any tool PEPO has open that isn't pinned joins the dock
+while it's open, open tools show a small dot, and **More** opens a shelf with
+every tool. Clicking a surface brings it to the front.
+
 The runtime drives it through `workspace`:
 
 ```ts
@@ -114,6 +122,18 @@ const id = workspace.open('map', 'Norway · route', { progress: 0 })
 workspace.update(id, { active: true, data: { progress: 0.4 } })
 workspace.close(id)
 pepoEvents.on('toolOpen', ({ toolId }) => /* user clicked a dock tool */)
+```
+
+### Status, on demand
+
+The header shows one quiet dot. Clicking **Local** opens what matters: where
+PEPO runs, whether it is private, whether it is connected, and each service
+the runtime reports (speech recognition, language model, voice). There is no
+permanent dashboard.
+
+```ts
+systemStatus.update({ local: true, private: true, connected: true })
+systemStatus.setService('Language model', 'busy', 'Thinking')
 ```
 
 ### Orb state language
@@ -214,6 +234,9 @@ project's ownership.
 - `frameloop="demand"` redraws at 30 fps in calm states and 60 fps in active ones. Nothing is drawn while the tab is hidden.
 - Fewer particles at phone widths. `prefers-reduced-motion` slows time and switches off parallax.
 - The background is static apart from CSS-variable parallax.
+- Adaptive quality: if frames take much longer than the paced target,
+  rendering resolution steps down (2 → 1.5 → 1); with steady headroom it
+  climbs back slowly.
 
 ## Removed in the restraint pass
 

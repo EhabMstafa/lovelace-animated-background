@@ -117,6 +117,8 @@ export function SpatialWorkspace() {
               icon={ICONS[win.kind]}
               active={win.active}
               delay={i === shown.length - 1 ? 0.12 : 0}
+              z={win.z}
+              onFocus={() => workspace.focus(win.id)}
               onClose={() => {
                 pepoEvents.emit('toolClose', { toolId: win.kind })
                 workspace.close(win.id)
