@@ -1,0 +1,100 @@
+FATHI AVATAR — PORTABLE SOURCE EXPORT
+Exported 2026-10-03 from apps/fathi-duplex/static.
+
+WHAT THIS IS
+The existing Fathi drawing, shaders, point geometry, depth and motion controller.
+It is an artwork-derived point cloud with shallow 3D depth and restrained motion,
+not a full anatomical 360-degree head mesh. No runtime reference PNG is used.
+No Fathi backend, Hermes, LiveKit, STT/TTS, credentials or CDN is included/needed.
+The export changes only the renderer's import and asset paths to be relative.
+The original application's files have not been changed.
+
+RUN THE EXAMPLE
+Extract the ZIP. In the extracted folder run:
+
+  python3 -m http.server 8765 --bind 127.0.0.1
+
+Open http://127.0.0.1:8765 in a modern browser with WebGL2.
+Use localhost or HTTPS: the geometry integrity check needs Web Crypto.
+Do not open index.html using file://; ES modules and fetch need a web server.
+The example can analyse a local audio file. Nothing is uploaded.
+
+COPY INTO ANOTHER PROJECT
+Copy these seven files TOGETHER, retaining their names and relative locations:
+
+  fathi-avatar.js       Main ES module: rendering, shaders and motion API
+  fathi-cloud.bin       Original point positions, weights and colours
+  fathi-depth.bin       Hash-bound depth coordinates
+  fathi-contour.bin     Hash-bound refined XY coordinates
+  fathi-strands.json    Curved detail paths (some paths intentionally hidden)
+  three.module.min.js   Bundled Three.js renderer
+  three.core.min.js     Bundled Three.js core
+
+Also retain THIRD_PARTY_NOTICES.txt with the vendored Three.js files.
+index.html and demo.js are optional examples, not required by the renderer.
+Serve the seven files as static assets. For React/Vue/Next/etc., putting them
+in a public/fathi-avatar/ directory is the simplest option. Dynamically import
+the served /fathi-avatar/fathi-avatar.js URL in a client-only mount effect.
+Do not bundle the JS separately without also handling the binary asset URLs.
+No npm install is needed for this standalone copy.
+
+MINIMAL INTEGRATION (BROWSER ES MODULE)
+
+  import { createFathiAvatar } from './fathi-avatar.js';
+
+  // The canvas needs a nonzero CSS width and height.
+  // Example CSS: #avatar { display:block; width:100%; height:500px; }
+  const canvas = document.querySelector('#avatar');
+  const avatar = await createFathiAvatar(canvas, { motion: true });
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  avatar.start();
+  avatar.setReduced(reduced.matches);
+  const onReduced = event => avatar.setReduced(event.matches);
+  reduced.addEventListener('change', onReduced);
+  const observer = new ResizeObserver(() => avatar.resize());
+  observer.observe(canvas);
+
+  avatar.setState('listening');
+  avatar.gesture('nod');
+
+  // When your view unmounts:
+  // observer.disconnect();
+  // reduced.removeEventListener('change', onReduced);
+  // avatar.dispose();
+
+The canvas background is transparent. The demo uses #0e151c, without a halo.
+Keep one avatar instance alive when resizing/repositioning it.
+
+AUDIO / STATE API
+setState: idle, listening, thinking, processing, speaking, tool, tool-active,
+          error, muted, offline.
+setAmplitude(level): normalized 0..1. While speaking, feed REAL OUTPUT audio
+          measurements repeatedly (e.g. every 50 ms). Stale levels decay.
+setSpectrum(bands): eight normalized 0..1 bands; indices 0, 2 and 4 are used.
+setFormants(openness, frontness): optional measured 0..1 axes, or null/null to
+          use the spectrum fallback. Not an ASR/phoneme or full lip-sync model.
+During listening, microphone energy can drive cyan light via setAmplitude;
+the controller deliberately does not let it open the orange speech mask.
+On speech stop/interruption, reset amplitude, spectrum and formants and return
+to listening/idle. demo.js illustrates actual audio-driven animation.
+
+OTHER CONTROLS
+gesture: nod, agree, consider, emphasis, lookLeft, lookRight.
+triggerBlink(); setPointer(x, y, active) with x/y in -1..1.
+setVitality: calm, natural, expressive.
+start(); stop(); resize(); setReduced(true/false); dispose().
+setQuality: high, medium, low (current renderer preserves the full point cloud;
+these are existing pixel-ratio tiers, not new particle decimation settings).
+Static inspection: createFathiAvatar(canvas, { inspection: true }); then
+setInspectionView('front'|'left'|'right') uses limited +/-3-degree views.
+
+OWNERSHIP / DEPENDENCIES
+This export does not assign a new licence to Fathi's original artwork or code.
+Three.js retains its MIT notice in THIRD_PARTY_NOTICES.txt and its source headers.
+Keep all geometry files from the SAME export; their SHA-256 bindings reject
+mismatched generations.
+
+OPTIONAL CPU REGRESSION TESTS (NODE.JS)
+  node --test test-avatar.mjs
+These validate geometry, relative paths, motion and audio gating with a mocked
+Three.js renderer. They do not replace a visual/WebGL check in your browser.
