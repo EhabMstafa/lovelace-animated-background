@@ -29,9 +29,11 @@ export const PARTICLE_KIND = { shell: 0, inner: 1, halo: 2 } as const
 
 /**
  * One geometry, three populations distinguished by `aKind`:
- *  - shell:  the sphere's skin, where most of the light lives
- *  - inner:  sparse depth particles, revealed while thinking
- *  - halo:   a few drifting motes outside, which react to the voice
+ *  - shell:  the field's boundary, where most of the light lives
+ *  - inner:  the volume, and a diffuse core (about 40% of them, gathered
+ *            near the centre) that suggests something lives inside
+ *  - halo:   a few motes just outside, which drift inward while listening
+ * Brightness tiers (faint / medium / bright) come from aSeed.w in the shader.
  */
 export function createOrbParticles(counts: ParticleCounts, seed = 7) {
   const rand = mulberry32(seed)
@@ -59,8 +61,11 @@ export function createOrbParticles(counts: ParticleCounts, seed = 7) {
     const g = (rand() + rand() + rand() - 1.5) / 1.5
     push(PARTICLE_KIND.shell, 1 + g * 0.018)
   }
-  for (let n = 0; n < counts.inner; n++) push(PARTICLE_KIND.inner, 0.12 + 0.8 * Math.pow(rand(), 0.7))
-  for (let n = 0; n < counts.halo; n++) push(PARTICLE_KIND.halo, 1.12 + Math.pow(rand(), 2.2) * 0.95)
+  for (let n = 0; n < counts.inner; n++) {
+    const core = rand() < 0.4
+    push(PARTICLE_KIND.inner, core ? 0.04 + 0.32 * Math.pow(rand(), 1.6) : 0.3 + 0.62 * Math.pow(rand(), 0.8))
+  }
+  for (let n = 0; n < counts.halo; n++) push(PARTICLE_KIND.halo, 1.06 + Math.pow(rand(), 1.5) * 0.42)
 
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.BufferAttribute(position, 3))
@@ -71,40 +76,44 @@ export function createOrbParticles(counts: ParticleCounts, seed = 7) {
   return geo
 }
 
+export interface FlowArc {
+  /** Orientation of the arc's own frame (Euler, radians), so no two arcs are parallel. */
+  frame: [number, number, number]
+  /** Start longitude and sweep (radians). */
+  lon: number
+  sweep: number
+  /** Base latitude and the amplitude of its slow meander (radians). */
+  lat: number
+  wave: number
+  /** Radius at the ends (near the boundary) and at the middle (deep in the volume). */
+  rEnd: number
+  rMid: number
+}
+
+/** The shared field axis the filaments turn about. */
+export const FIELD_AXIS = new THREE.Vector3(0.38, 1, 0.22).normalize()
+
 /**
- * Light streams, organised: a few bands of parallel ribbons sweeping around
- * one shared, tilted axis. Ribbons in a band are evenly spaced and nested in
- * depth, follow the same gentle wave and start and end in a staggered fan,
- * so the light inside the glass reads as calm, ordered currents.
+ * Field filaments: a few single curved paths that follow the sphere, enter
+ * near the boundary, dive through the volume and come back out, meandering a
+ * little like lines of a field. Each has its own frame, so they cross in
+ * depth instead of running parallel.
  */
-export function createStreams(bands: number, perBand: number, seed: number, rMin: number, rMax: number, segments = 120) {
-  const rand = mulberry32(seed)
-  const lines: THREE.Vector3[][] = []
-  const axis = new THREE.Vector3(0.38, 1, 0.22).normalize()
-  const frame = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis)
-  for (let b = 0; b < bands; b++) {
-    const lat0 = bands === 1 ? 0 : -0.5 + (1.0 * b) / (bands - 1)
-    const lon0 = (b / bands) * Math.PI * 2 + rand() * 0.3
-    const len = 2.6
-    const wave = 0.07
-    for (let k = 0; k < perBand; k++) {
-      const u = perBand === 1 ? 0.5 : k / (perBand - 1)
-      const lat = lat0 + (u - 0.5) * 0.2
-      const r = rMin + (rMax - rMin) * u
-      const startT = u * 0.12
-      const endT = 0.82 + u * 0.12
-      const line: THREE.Vector3[] = []
-      for (let s = 0; s <= segments; s++) {
-        const t = startT + (endT - startT) * (s / segments)
-        const lon = lon0 + t * len
-        const la = lat + Math.sin(t * Math.PI * 1.2 + b * 1.7) * wave
-        const p = new THREE.Vector3(Math.cos(la) * Math.cos(lon), Math.sin(la), Math.cos(la) * Math.sin(lon))
-        line.push(p.multiplyScalar(r).applyQuaternion(frame))
-      }
-      lines.push(line)
+export function createFlowArcs(arcs: FlowArc[], segments = 140) {
+  const e = new THREE.Euler()
+  const q = new THREE.Quaternion()
+  return arcs.map(({ frame, lon, sweep, lat, wave, rEnd, rMid }) => {
+    q.setFromEuler(e.set(frame[0], frame[1], frame[2]))
+    const pts: THREE.Vector3[] = []
+    for (let s = 0; s <= segments; s++) {
+      const t = s / segments
+      const lo = lon + sweep * t
+      const la = lat + wave * Math.sin(t * Math.PI * 1.4 + lon)
+      const r = rEnd + (rMid - rEnd) * Math.sin(t * Math.PI) ** 1.5
+      pts.push(new THREE.Vector3(Math.cos(la) * Math.cos(lo), Math.sin(la), Math.cos(la) * Math.sin(lo)).multiplyScalar(r).applyQuaternion(q))
     }
-  }
-  return lines
+    return pts
+  })
 }
 
 /** A closed ellipse in the XY plane, as a point list. */
@@ -117,14 +126,14 @@ export function ellipsePoints(rx: number, ry: number, segments = 200) {
   return pts
 }
 
-/** Star nodes scattered on (and just under) the Orb's surface. */
+/** A few active points of light at different depths inside the volume. */
 export function createStarNodes(count: number, seed: number) {
   const rand = mulberry32(seed)
   const pos = new Float32Array(count * 3)
   const s = new Float32Array(count)
   const v = new THREE.Vector3()
   for (let i = 0; i < count; i++) {
-    randomDir(rand, v).multiplyScalar(0.9 + rand() * 0.1)
+    randomDir(rand, v).multiplyScalar(0.3 + rand() * 0.62)
     pos.set([v.x, v.y, v.z], i * 3)
     s[i] = rand()
   }

@@ -5,7 +5,7 @@ import { createOrbMotion } from './orbMotion'
 const dt = 1 / 60
 
 describe('orb motion', () => {
-  it('breathes in cycles of 5–9 s that are never identical', () => {
+  it('breathes in cycles of 4–7 s that are never identical', () => {
     const m = createOrbMotion(mulberry32(3))
     const peaks: number[] = []
     let a = 0, b = 0
@@ -18,8 +18,8 @@ describe('orb motion', () => {
     // Skip the first, partial cycle.
     const gaps = peaks.slice(2).map((t, i) => t - peaks[i + 1])
     expect(gaps.length).toBeGreaterThan(10)
-    for (const g of gaps) expect(g).toBeGreaterThan(4.5)
-    for (const g of gaps) expect(g).toBeLessThan(9.5)
+    for (const g of gaps) expect(g).toBeGreaterThan(3.6)
+    for (const g of gaps) expect(g).toBeLessThan(7.4)
     expect(new Set(gaps.map((g) => g.toFixed(1))).size).toBeGreaterThan(4)
   })
 

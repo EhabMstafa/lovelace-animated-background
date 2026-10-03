@@ -26,3 +26,34 @@ export const helpers = /* glsl */ `
     return ry * rx;
   }
 `
+
+/**
+ * Value noise, and the field's boundary energy: how strongly the edge of the
+ * Orb is lit in a given screen direction. Uneven (bright stretches, quiet
+ * ones, a few where the edge almost dissolves), slowly migrating, and a
+ * little stronger lower left, where light enters. Shared by the skin, the
+ * glow and the particles so the whole boundary agrees.
+ */
+export const noise = /* glsl */ `
+  float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+  float vnoise(vec3 p) {
+    vec3 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), f.x), mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), f.x), f.y),
+               mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), f.x), mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+  }
+  float fbm3(vec3 p) {
+    float v = 0.0, a = 0.5;
+    for (int i = 0; i < 3; i++) { v += a * vnoise(p); p = p * 2.03 + 11.7; a *= 0.5; }
+    return v / 0.875;
+  }
+  float edgeEnergy(vec2 sn, float t) {
+    // The energy favours one side, which wanders slowly around the lower
+    // left; the opposite side always stays quieter, so the edge never closes
+    // into an even ring. Noise breaks it into uneven stretches.
+    float a = -2.24 + 0.9 * sin(t * 0.031) + 0.4 * sin(t * 0.017 + 1.3);
+    float side = 0.5 + 0.5 * dot(sn, vec2(cos(a), sin(a)));
+    float n = 0.55 * fbm3(vec3(sn * 1.35 + 3.1, t * 0.035)) + 0.45 * side;
+    return mix(0.18, 1.0, smoothstep(0.3, 0.62, n));
+  }
+`

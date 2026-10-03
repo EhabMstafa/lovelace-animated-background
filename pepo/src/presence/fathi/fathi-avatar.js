@@ -265,7 +265,7 @@ const RIG_GLSL=`
     // source-image iris estimate). Lift them into the open eye, let them follow
     // the gaze, and let the lids cover them in a blink. Lids and socket stay put.
     float pupil=pupilMask(bind,warm);
-    p.x-=sign(bind.x)*.077*pupil;
+    p.x-=sign(bind.x)*.087*pupil;
     p.y+=(.045-uBlink*.047)*pupil;
     p.x+=uGaze.x*.030*pupil;p.y+=uGaze.y*.012*pupil;
     float head=smoothstep(-1.35,-.48,bind.y);
@@ -472,7 +472,7 @@ export async function createFathiAvatar(canvas, opts={}){
         float speechGlow=(1.0+uJaw*.06*aWarm)*mix(uPresence.x,uPresence.y,aWarm);
         vA=lum*uPointGain*edge*smoothstep(-1.96,-1.74,position.y)*finish.x*speechGlow
           *(1.0+lip*(.65+uJaw*.22));
-        vA*=1.0-.55*pupilMask(position,aWarm); // PEPO: softer pupils
+        vA*=1.0-.70*pupilMask(position,aWarm); // PEPO: softer pupils
         vCol=mix(mix(uCyan,uAmber,finish.y),vec3(1.0,.50,.30),lip*(.42+uJaw*.08));
         vCol=mix(vCol,vec3(1.0,.53,.29),uPresence.z*.22*(1.0-aWarm));
         gl_PointSize=clamp(uSize*uProj/-mv.z,1.0,uMaxPx);

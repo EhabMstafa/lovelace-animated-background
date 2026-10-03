@@ -60,6 +60,11 @@ export function createRibbonGeometry(lines: THREE.Vector3[][], closed = false) {
 export const ribbonVertex = /* glsl */ `
   uniform vec2 uResolution;
   uniform float uWidth;
+  // Optional (0 when unset): each line turns about uSwirlAxis at its own pace,
+  // and lines behind the centre draw wider and softer (depth of field).
+  uniform float uSwirl;
+  uniform vec3 uSwirlAxis;
+  uniform float uDof;
   attribute vec3 aPrev;
   attribute vec3 aNext;
   attribute float aSide;
@@ -71,11 +76,18 @@ export const ribbonVertex = /* glsl */ `
   varying float vDepth;
   varying vec2 vView;
 
+  vec3 swirl(vec3 p) {
+    float ang = uSwirl * (0.55 + 0.9 * fract(aId * 0.618 + 0.21));
+    float c = cos(ang), s = sin(ang);
+    return p * c + cross(uSwirlAxis, p) * s + uSwirlAxis * dot(uSwirlAxis, p) * (1.0 - c);
+  }
+
   void main() {
+    vec3 P = swirl(position);
     mat4 mvp = projectionMatrix * modelViewMatrix;
-    vec4 c = mvp * vec4(position, 1.0);
-    vec4 a = mvp * vec4(aPrev, 1.0);
-    vec4 b = mvp * vec4(aNext, 1.0);
+    vec4 c = mvp * vec4(P, 1.0);
+    vec4 a = mvp * vec4(swirl(aPrev), 1.0);
+    vec4 b = mvp * vec4(swirl(aNext), 1.0);
     float aspect = uResolution.x / uResolution.y;
     vec2 sa = a.xy / a.w * vec2(aspect, 1.0);
     vec2 sb = b.xy / b.w * vec2(aspect, 1.0);
@@ -83,12 +95,13 @@ export const ribbonVertex = /* glsl */ `
     dir = length(dir) < 1e-6 ? vec2(1.0, 0.0) : normalize(dir);
     vec2 normal = vec2(-dir.y, dir.x);
     normal.x /= aspect;
-    c.xy += normal * aSide * uWidth / uResolution.y * c.w;
-    gl_Position = c;
-
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vec4 mv = modelViewMatrix * vec4(P, 1.0);
     vec4 centre = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
     vDepth = mv.z - centre.z;
+    float width = uWidth * (1.0 + uDof * smoothstep(0.2, -0.6, vDepth));
+    c.xy += normal * aSide * width / uResolution.y * c.w;
+    gl_Position = c;
+
     vView = mv.xy - centre.xy;
     vT = aT;
     vId = aId;

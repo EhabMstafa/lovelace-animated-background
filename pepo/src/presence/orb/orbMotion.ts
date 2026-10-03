@@ -5,7 +5,7 @@ import type { PresenceState } from '../../core/presence'
  * movement comes from its semantic state (stateParams.ts); this adds the
  * living parts with restraint:
  * - breath: a slow, nearly imperceptible energy cycle whose length varies
- *   (5–9 s) so it never reads as a loop;
+ *   (4–7 s) so it never reads as a loop;
  * - voice: microphone and speech levels pass a noise gate, are normalised and
  *   smoothed with a slow attack and a slower release, so the Orb follows
  *   phrases, not syllables, and audio stays a minority of the motion;
@@ -27,7 +27,7 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 
 export function createOrbMotion(rand: () => number = Math.random) {
   let phase = rand()
-  let period = 5 + rand() * 4
+  let period = 4 + rand() * 3
   let depth = 1
   let listen = 0
   let speak = 0
@@ -49,7 +49,7 @@ export function createOrbMotion(rand: () => number = Math.random) {
       phase += dt / period
       if (phase >= 1) {
         phase -= 1
-        period = 5 + rand() * 4
+        period = 4 + rand() * 3
         depth = rand() < 0.15 ? 1.25 : 0.75 + rand() * 0.3
       }
       // Asymmetric: a slightly quicker inhale than exhale.

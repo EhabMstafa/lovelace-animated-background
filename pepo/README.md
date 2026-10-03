@@ -58,7 +58,7 @@ src/
 │  └─ tokens.ts                 colours, durations, easing
 ├─ presence/
 │  ├─ PresenceLayer.tsx         the Orb's R3F canvas (demand frameloop) and FATHI's canvas above it
-│  ├─ PresenceBody.tsx          the Orb: glass, streams, orbits, stars and particles
+│  ├─ PresenceBody.tsx          the Orb: energy volume, field filaments, one orbit, particles
 │  ├─ body/particleShaders.ts   the Orb's particles
 │  ├─ orb/                      state language, motion signals (orbMotion.ts), geometry, shaders
 │  ├─ fathi/
@@ -209,6 +209,29 @@ systemStatus.update({ local: true, private: true, connected: true })
 systemStatus.setService('Language model', 'busy', 'Thinking')
 ```
 
+### The Orb
+
+An intelligent field of energy with depth, not a glass ball with effects on
+top:
+- **Boundary:** the edge is lit where the field gathers, unevenly: bright
+  stretches, quiet ones, places where it almost dissolves (about two thirds
+  stays clearly readable). The brighter side wanders slowly around the lower
+  left, where light enters; the opposite side always stays quieter, so the
+  edge never closes into a neon ring. The glow is local to the lit stretches;
+  there is no halo around it all and no glass reflections.
+- **Depth:** a front shell of faint particles, a mid volume with a drifting
+  nebula and a few curved field filaments that dive through it (each on its
+  own slow life: emerge, fade, come back), and a diffuse deep core, slightly
+  off centre. Far-side particles are smaller, dimmer and softer; filaments
+  behind the centre draw wider and fainter. Particles come in tiers: most
+  barely there, some defining the volume, a few active.
+- **Orbits:** one thin primary orbit, blue into a violet accent, only partly
+  visible and hidden where it passes behind the Orb, plus a barely-there
+  second trajectory. No gyroscope rings, no star glints.
+- **Colour:** mostly blue, cyan where light enters, violet as an accent,
+  white only in tiny highlights. On the light theme the volume is a deep
+  blue that lets a little of the sky through.
+
 ### Orb state language
 
 Every state is a set of targets for the same continuous parameters (scale,
@@ -217,11 +240,11 @@ glow). The renderer eases toward them with a time constant of about 0.3 s, so
 any state morphs into any other in roughly a second with no bespoke
 transitions.
 
-- **idle**: slow spin, one breath every ~6 s, blue and cyan
-- **listening**: leans in and grows slightly *before* audio starts; a thin ripple runs through; outer motes follow the voice
+- **idle**: very slow; the inside drifts, the edge energy migrates, the core changes density; one breath every 4–7 s
+- **listening**: leans in slightly *before* audio starts; inside grows calmer and more coherent; a few tiny cyan impulses travel inward and outer motes drift in to the edge (no waveform)
 - **understanding**: particles gather inward, orbits align, surface filaments light up and connect
-- **thinking**: interior particles travel curved paths, inner filaments appear, violet joins
-- **speaking**: luminance waves travel from the core to the surface, driven by speech energy that fades out slowly
+- **thinking**: the inside grows more active (filaments and particles move more), deeper filaments appear, violet shows in the deeper layers; brightness stays the same
+- **speaking**: slow internal rises with each phrase (core, filaments, active points), settling in pauses; audio only touches the detail
 - **working**: organised and active (in Scene 3 it will also stream particles toward tool windows)
 - **waiting**: calmer and dimmer than idle
 - **attentive**: the user is about to speak or type (the keyboard opened): a little nearer and brighter
@@ -230,12 +253,13 @@ transitions.
 - **error**: dimmer and slower; never an alarm
 
 On top of the state, `orbMotion.ts` adds the living parts with restraint:
-- **Breath:** a nearly imperceptible energy cycle (about 1.2% of the
-  radius) whose length varies between 5 and 9 s.
+- **Breath:** a nearly imperceptible cycle of edge energy, inner density and
+  core intensity (size moves at most about 0.6%), whose length varies
+  between 4 and 7 s.
 - **Voice:** microphone and speech levels pass a noise gate, are normalised
   and smoothed (slow attack, slower release). The Orb follows phrases, never
   syllables, and audio stays a minority of its motion.
-- **Emphasis:** a semantic cue gives one gentle rise in light.
+- **Emphasis:** a semantic cue gives one small, local highlight inside the Orb.
 
 ### Orb ↔ Avatar
 
