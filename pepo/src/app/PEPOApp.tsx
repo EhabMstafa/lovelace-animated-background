@@ -3,7 +3,6 @@ import { MotionConfig } from 'framer-motion'
 import { AmbientBackground } from '../background/AmbientBackground'
 import { AdaptiveDock } from '../chrome/AdaptiveDock'
 import { GlobalHeader } from '../chrome/GlobalHeader'
-import { NavigationRail } from '../chrome/NavigationRail'
 import { usePresence } from '../core/presence'
 import { DemoConductor } from '../demo/DemoConductor'
 import { StatePicker } from '../demo/StatePicker'
@@ -50,7 +49,7 @@ interface PEPOAppProps {
  * PEPO. Three depth planes:
  *   far  – AmbientBackground
  *   mid  – PresenceLayer (the Orb or the Avatar)
- *   near – SpatialWorkspace (tools PEPO places), header, caption, voice surface, dock, navigation
+ *   near – SpatialWorkspace (tools PEPO places), header, caption, voice surface, toolbar
  */
 export function PEPOApp({ demo = true }: PEPOAppProps) {
   const compact = useCompact()
@@ -66,7 +65,6 @@ export function PEPOApp({ demo = true }: PEPOAppProps) {
       <SpatialWorkspace />
 
       <GlobalHeader />
-      {!compact && <NavigationRail />}
 
       <main className="near-plane">
         <PresenceCaption text={caption} />

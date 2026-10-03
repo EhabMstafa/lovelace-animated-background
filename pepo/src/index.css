@@ -120,6 +120,8 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
   position: fixed;
   inset: 0;
   overflow: hidden;
+  /* Nothing (a focused control, a find-in-page) may scroll the stage itself. */
+  overflow: clip;
   isolation: isolate;
 }
 
@@ -294,7 +296,8 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  padding-bottom: 22px;
+  /* The caption stays where it was, over the voice control and toolbar row. */
+  padding-bottom: 190px;
   pointer-events: none;
 }
 .near-plane > * { pointer-events: auto; }
@@ -314,17 +317,29 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
 }
 
 .voice-surface {
+  position: absolute;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 30px;
+  /* On the toolbar's row, centres aligned: in PEPO's column while it works
+     aside, else in the middle (next to a bottom toolbar on wide screens). */
+  bottom: 26px;
+  left: calc(var(--voice-x, 50%) - var(--cmd-w, 232px) / 2);
+  transition: left 0.8s var(--ease-out), bottom 0.5s var(--ease-out);
 }
-/* Side by side, the voice control glides into PEPO's column with it. */
-.voice-surface { transform: translateX(var(--voice-dx, 0px)); transition: transform 0.8s var(--ease-out); }
+:root[data-voice='row'] .voice-surface { left: calc(50% - (var(--cmd-w, 232px) + 16px + var(--dock-w, 0px)) / 2); }
+:root[data-voice='stack'] .voice-surface { bottom: calc(52px + var(--dock-h, 56px)); }
 :root[data-voice='side'] .command.is-typing { width: min(520px, var(--voice-w)); }
-:root[data-voice='side'] .transcript,
-:root[data-voice='side'] .transcript p { max-width: var(--voice-w); }
+/* What you're saying floats just above the voice control. */
+.voice-surface .transcript {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+}
+.voice-surface .transcript,
+.voice-surface .transcript p { max-width: var(--voice-w, min(560px, 86vw)); }
 
 .transcript {
   min-height: 22px;
@@ -495,75 +510,46 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
 .dock-item.is-away .dock-relevance { width: 4px; height: 4px; background: transparent; box-shadow: inset 0 0 0 1px var(--cyan-soft); }
 .dock-divider { width: 1px; height: 20px; margin: 0 6px; background: var(--divider); }
 
-/* ───────── navigation rail ───────── */
-.nav-zone {
+/* ───────── toolbar placement: bottom, left or right; auto-hide ───────── */
+.dock-wrap {
   position: absolute;
-  z-index: 12;
-  left: 0;
-  top: 80px;
-  bottom: 120px;
-  width: 22px;
-  display: flex;
-  align-items: center;
+  z-index: 6;
+  transition: left 0.8s var(--ease-out), top 0.5s var(--ease-out), transform 0.32s var(--ease-out), scale 0.32s var(--ease-out), opacity 0.32s var(--ease-out);
 }
-.nav-zone.is-open { width: 96px; }
-
-.nav-handle {
-  position: absolute;
-  left: 8px;
-  top: 50%;
-  height: 40px;
-  margin-top: -20px;
-  width: 2px;
-  border-radius: 2px;
-  background: var(--divider);
-}
-
-.nav-rail {
-  list-style: none;
-  margin: 0 0 0 14px;
-  padding: 7px;
-  border-radius: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.nav-item {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  color: var(--text-muted);
-  transition: color 0.15s, background 0.15s, scale 0.15s var(--ease-out);
-}
-.nav-item:hover, .nav-item:focus-visible { color: var(--text-primary); background: var(--hover); }
-.nav-item.is-active { color: var(--cyan-soft); }
-.nav-item.is-active::before {
-  content: '';
-  position: absolute;
-  left: -7px;
-  top: 12px;
-  bottom: 12px;
-  width: 2px;
-  border-radius: 2px;
-  background: var(--cyan-soft);
-  box-shadow: 0 0 8px var(--cyan);
-}
-.nav-label {
-  position: absolute;
-  left: calc(100% + 16px);
-  font-size: 12px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  opacity: 0;
-  transform: translateX(-4px);
-  transition: opacity 0.18s var(--ease-out), transform 0.18s var(--ease-out);
-  pointer-events: none;
-}
-.nav-item:hover .nav-label, .nav-item:focus-visible .nav-label { opacity: 1; transform: none; }
-.nav-divider { height: 1px; margin: 5px 8px; background: var(--divider); }
+.dock-wrap.is-bottom { bottom: 22px; left: calc(var(--dock-x, 50%) - var(--dock-w, 0px) / 2); }
+:root[data-voice='row'] .dock-wrap.is-bottom { left: calc(50% - (var(--cmd-w, 232px) + 16px + var(--dock-w, 0px)) / 2 + var(--cmd-w, 232px) + 16px); }
+.dock-wrap.is-left { left: 14px; top: calc(50% - var(--dock-h, 0px) / 2); }
+.dock-wrap.is-right { right: 14px; top: calc(50% - var(--dock-h, 0px) / 2); }
+.dock-wrap.is-vertical .dock { flex-direction: column; padding: 8px 6px; max-height: calc(100vh - 150px); overflow-y: auto; scrollbar-width: none; }
+.dock-wrap.is-vertical .dock-divider { width: 20px; height: 1px; margin: 6px 0; flex: none; }
+.dock-wrap.is-left .dock::before { background: radial-gradient(140px circle at 0% var(--ly, 50%), rgb(var(--accent-rgb) / 0.09), transparent 70%); }
+.dock-wrap.is-right .dock::before { background: radial-gradient(140px circle at 100% var(--ly, 50%), rgb(var(--accent-rgb) / 0.09), transparent 70%); }
+.dock-wrap.is-vertical .dock-item:hover .dock-icon { transform: none; }
+.dock-wrap.is-left .dock-tip-anchor,
+.dock-wrap.is-right .dock-tip-anchor { top: 0; bottom: 0; align-items: center; }
+.dock-wrap.is-left .dock-tip-anchor { left: calc(100% + 12px); right: auto; justify-content: flex-start; }
+.dock-wrap.is-right .dock-tip-anchor { right: calc(100% + 12px); left: auto; justify-content: flex-end; }
+.dock-wrap.is-left .tool-shelf { bottom: auto; top: 50%; left: calc(100% + 12px); translate: 0 -50%; }
+.dock-wrap.is-right .tool-shelf { bottom: auto; top: 50%; right: calc(100% + 12px); translate: 0 -50%; }
+/* Auto-hide: out of sight until the pointer reaches its edge (a faint mark shows where). */
+.dock-wrap.is-hidden { opacity: 0; pointer-events: none; }
+.dock-wrap.is-hidden { scale: 0.98; }
+.dock-wrap.is-bottom.is-hidden { transform: translateY(14px); }
+.dock-wrap.is-left.is-hidden { transform: translateX(-12px); }
+.dock-wrap.is-right.is-hidden { transform: translateX(12px); }
+/* While a hidden bottom toolbar is away, the voice control has the middle to itself. */
+:root[data-voice='row'][data-dock-shown='false'] .voice-surface { left: calc(50% - var(--cmd-w, 232px) / 2); }
+:root[data-voice='row'][data-dock-hide='true'] .voice-surface { transition: left 0.32s var(--ease-out), bottom 0.5s var(--ease-out); }
+.dock-sensor { position: absolute; z-index: 6; }
+.dock-sensor.is-bottom { left: 0; right: 0; bottom: 0; height: 14px; }
+.dock-sensor.is-left { left: 0; top: 70px; bottom: 70px; width: 14px; }
+.dock-sensor.is-right { right: 0; top: 70px; bottom: 70px; width: 14px; }
+.dock-sensor::after { content: ''; position: absolute; border-radius: 2px; background: var(--divider); transition: opacity 0.2s; }
+.dock-sensor.is-bottom::after { left: 50%; bottom: 6px; width: 40px; height: 2px; margin-left: -20px; }
+.dock-sensor.is-left::after { left: 6px; top: 50%; width: 2px; height: 40px; margin-top: -20px; }
+.dock-sensor.is-right::after { right: 6px; top: 50%; width: 2px; height: 40px; margin-top: -20px; }
+.dock-sensor.is-revealed::after { opacity: 0; }
+.shelf-divider { grid-column: 1 / -1; height: 1px; margin: 4px 6px; background: var(--divider); }
 
 /* ───────── development panel (Shift+D; never shown otherwise) ───────── */
 .dev-panel {
@@ -611,8 +597,9 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
     --stage: min(128vw, 72vh);
   }
   .global-header { height: 54px; padding: 0 20px; padding-top: env(safe-area-inset-top); }
-  .near-plane { padding-bottom: calc(26px + env(safe-area-inset-bottom)); }
-  .voice-surface { margin-bottom: 8px; }
+  .near-plane { padding-bottom: calc(174px + env(safe-area-inset-bottom)); }
+  .dock-wrap.is-bottom { bottom: calc(26px + env(safe-area-inset-bottom)); }
+  :root[data-voice='stack'] .voice-surface { bottom: calc(34px + var(--dock-h, 50px) + env(safe-area-inset-bottom)); }
   .command { height: 56px; border-radius: 28px; min-width: min(300px, 86vw); padding: 0 10px 0 8px; }
   .mic { width: 42px; height: 42px; }
   .command-idle, .command-listening { flex: 1; justify-content: space-between; }
@@ -815,9 +802,10 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
 /* Phones: one small tool button under the voice control; hidden while a sheet is open (its tabs take over). */
 .dock-wrap.is-compact .dock { padding: 4px; }
 :root[data-workspace='sheet'] .dock-wrap.is-compact { display: none; }
+:root[data-workspace='sheet'] .voice-surface { bottom: calc(34px + env(safe-area-inset-bottom)); }
 
 @media (prefers-reduced-motion: reduce) {
-  .presence-stage, .fathi-stage, .ambient-orb-reflection, .voice-surface { transition: none; }
+  .presence-stage, .fathi-stage, .ambient-orb-reflection, .voice-surface, .dock-wrap { transition: none; }
 }
 
 /* With PEPO stepped aside, its words stay with it, under the presence. */
@@ -843,7 +831,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
 }
 
 /* ───────── dock shelf ───────── */
-.dock-wrap { position: relative; display: flex; justify-content: center; }
+.dock-wrap { display: flex; justify-content: center; }
 .dock-item.is-open { color: var(--text-primary); }
 .tool-shelf {
   position: absolute;
@@ -908,7 +896,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
 
 /* Microinteractions: a press is a small, quick give (about 100 ms), with no
    bounce; release eases back in about 150 ms. */
-:is(.dock-item, .mic, .form-option, .theme-toggle, .window-action, .icon-btn, .nav-item, .tool-shelf button, .status-trigger, .sheet-tabs button, .user-chip):active {
+:is(.dock-item, .mic, .form-option, .theme-toggle, .window-action, .icon-btn, .tool-shelf button, .status-trigger, .sheet-tabs button, .user-chip):active {
   scale: 0.97;
   transition-duration: 0.1s;
 }

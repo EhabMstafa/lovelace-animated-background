@@ -36,7 +36,8 @@ npm test         # unit tests: workspace layout and store
 | **Shift+D** | Development panel (never shown otherwise): force any presence state (keys 1–9, 0, - while open), Avatar / Orb, Dark / Light |
 | **Orb / Avatar** toggle in the header, or press **A** | Choose which presentation PEPO uses (remembered per browser). A ~350 ms switch: one leaves, the other arrives; nothing else changes |
 | Sun / moon button in the header, or press **T** | Dark or light theme (remembered per browser; follows the system until chosen) |
-| Move the pointer to the left edge | Reveal the navigation rail. **Conversations** opens the history; **Home** puts the work away; **Workspace** brings it back |
+| The toolbar's first icons | **Home** puts the work away; **Workspace** brings it back; **Conversations** opens the history; **Memory** what PEPO remembers. The last icon is **Settings** |
+| Settings → Toolbar | Put the toolbar at the bottom, left or right, and turn on auto-hide (it then shows when the pointer reaches its edge) |
 
 When microphone access is granted, the Orb and the waveform react to your
 real voice. When it isn't, they use a synthetic speech envelope instead.
@@ -76,7 +77,7 @@ src/
 │  ├─ LightStreams.tsx          particles of light from PEPO to the surface it is working on
 │  └─ surfaces/                 Map, Notes, Terminal, Browser, Files, Code, Document, Tasks, Conversation
 ├─ voice/                       VoiceSurface, Waveform, Transcript, PresenceCaption, mic energy
-├─ chrome/                      GlobalHeader, PresenceToggle, ThemeToggle, StatusIndicator, NavigationRail, AdaptiveDock
+├─ chrome/                      GlobalHeader, PresenceToggle, ThemeToggle, StatusIndicator, AdaptiveDock (the one toolbar)
 ├─ background/                  AmbientBackground (a lake at night, or at dawn in the light theme)
 └─ demo/                        DemoConductor + StatePicker (remove when the runtime connects)
 ```
@@ -116,9 +117,11 @@ PEPO acts:
   you move your work to the left, PEPO takes the right side instead, and
   with three surfaces on screen it rises to the upper corner so the work
   has the room.
-- **The voice control goes with PEPO:** side by side, "Talk to PEPO" glides
-  into PEPO's column under its words, so the middle is free and the work
-  reaches down to the dock. It returns to the centre with PEPO.
+- **The voice control goes with PEPO:** "Talk to PEPO" sits on the
+  toolbar's row at the very bottom. Side by side, it glides into PEPO's
+  column under its words and the toolbar centres under the work, so the
+  middle is free and the work reaches down to the toolbar. With nothing open
+  the two share the row in the middle. It returns to the centre with PEPO.
 - **Surfaces arrive:** each one grows out of PEPO's light (it scales up from
   the corner nearest PEPO) and the arrangement settles around the task.
 - **Layout:** one large surface, then a large surface over a smaller one,
@@ -146,10 +149,10 @@ PEPO acts:
   file shown as itself. Plus Map, Notes, Terminal and Conversation. Opened
   from the dock in the demo, they show sample content
   (`demo/sampleContent.ts`).
-- **Memory and Settings:** the navigation opens them as surfaces. Memory
+- **Memory and Settings:** the toolbar opens them as surfaces. Memory
   lists what PEPO remembers, each item one click from forgotten. Settings
-  holds presentation (Avatar / Orb), theme, motion and privacy. **Tools**
-  opens the shelf.
+  holds presentation (Avatar / Orb), theme, the toolbar's place and
+  auto-hide, motion and privacy.
 - **Light streams:** fine particles travel from PEPO to a surface when it
   appears and for as long as PEPO is writing into it, marked by a small
   pulse in the surface's label.
@@ -172,9 +175,15 @@ PEPO acts:
   visible above the voice control. The Avatar moves a little less on small
   screens.
 
-The dock adapts too: pinned tools, then whatever is open or put away (a dot,
-hollow when put away), then up to two tools closed in the last ten minutes.
-**More** opens a shelf with every tool. Clicking a surface brings it to the
+There is one toolbar (the navigation rail and the dock are merged): places
+(Home, Workspace, Conversations, Memory), then pinned tools, then whatever is
+open or put away (a dot, hollow when put away), then up to two tools closed
+in the last ten minutes, then **More** (a shelf with every tool) and
+**Settings**. It sits at the bottom, left or right (Settings), and can
+auto-hide: a faint mark at its edge shows where it waits, it appears when the
+pointer or keyboard focus reaches it and leaves 0.7 s after. A hidden
+toolbar takes no room beside the work. On phones it stays one button under
+the voice control, and its shelf starts with the places. Clicking a surface brings it to the
 front. Buttons answer a hover within ~150 ms and a press with a small
 (0.97) give, with no bounce.
 
@@ -375,7 +384,7 @@ added:
 - The system status panel, hardware meters and Wi-Fi/display icons (they belong in diagnostics)
 - The header mic indicator, which duplicated the command surface
 - The PEPO entry in the dock (the Orb *is* PEPO), plus Maps, Code and Images from the default dock (they appear only when relevant)
-- Permanent labels on the dock and rail (they show on hover only), and the "Listening" caption, which duplicated the command surface
+- Permanent labels on the toolbar (they show on hover only), and the "Listening" caption, which duplicated the command surface
 - 30% of the waveform bars
 
 Design references live in `docs/references/`.

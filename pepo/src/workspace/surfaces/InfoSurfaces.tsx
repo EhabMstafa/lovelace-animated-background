@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Search as SearchIcon, X } from 'lucide-react'
 import { setPresenceForm } from '../../chrome/PresenceToggle'
 import { conversation } from '../../core/conversation'
+import { dockPrefs, useDockPrefs, type DockSide } from '../../core/dockPrefs'
 import { usePresence } from '../../core/presence'
 import { theme, useTheme } from '../../core/theme'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
@@ -183,6 +184,7 @@ export function SettingsSurface() {
   const { form } = usePresence()
   const current = useTheme()
   const reduced = useReducedMotion()
+  const dock = useDockPrefs()
   const Choice = ({ value, options, onPick, label }: { value: string; options: [string, string][]; onPick: (v: string) => void; label: string }) => (
     <div className="setting-choice" role="radiogroup" aria-label={label}>
       {options.map(([v, l]) => (
@@ -199,6 +201,14 @@ export function SettingsSurface() {
       <div className="setting">
         <div><p className="setting-name">Theme</p><p className="setting-hint">Follows your system until you choose.</p></div>
         <Choice label="Theme" value={current} options={[['dark', 'Dark'], ['light', 'Light']]} onPick={(v) => theme.set(v as 'dark' | 'light')} />
+      </div>
+      <div className="setting">
+        <div><p className="setting-name">Toolbar</p><p className="setting-hint">Where PEPO’s toolbar sits. On phones it stays under the voice control.</p></div>
+        <Choice label="Toolbar position" value={dock.side} options={[['bottom', 'Bottom'], ['left', 'Left'], ['right', 'Right']]} onPick={(v) => dockPrefs.set({ side: v as DockSide })} />
+      </div>
+      <div className="setting">
+        <div><p className="setting-name">Auto-hide</p><p className="setting-hint">Hide the toolbar until the pointer reaches its edge.</p></div>
+        <Choice label="Auto-hide toolbar" value={dock.autoHide ? 'on' : 'off'} options={[['off', 'Off'], ['on', 'On']]} onPick={(v) => dockPrefs.set({ autoHide: v === 'on' })} />
       </div>
       <div className="setting">
         <div><p className="setting-name">Motion</p><p className="setting-hint">Follows your system’s reduce-motion setting.</p></div>

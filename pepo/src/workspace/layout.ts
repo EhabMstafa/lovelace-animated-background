@@ -9,6 +9,8 @@ export interface SpatialLayout {
   caption: { x: number; y: number; w: number }
   /** Side by side, the voice control moves into PEPO's column (centre x, width), freeing the middle. */
   voice?: { x: number; w: number }
+  /** A bottom toolbar's centre: under the work while PEPO is aside, else the middle. */
+  dock: { x: number }
   /** Surfaces on screen. Open surfaces without a rect wait in the dock until brought forward. */
   rects: Record<string, Rect>
   mode: 'desktop' | 'tablet' | 'sheet'
@@ -19,12 +21,18 @@ const PRIORITY = ['map', 'browser', 'video', 'documents', 'research', 'code', 'i
 
 const GAP = 14
 const HEADER = 64
-/** Room kept for the voice surface and the dock. */
+/** Stacked: room kept for the voice surface over a bottom toolbar. */
 const BOTTOM = 168
-/** Room kept for the dock alone (the voice surface has moved into PEPO's column). */
+/** Stacked: room kept for the voice surface alone (the toolbar is at a side, or hidden). */
+const VOICE_ONLY = 124
+/** Room kept for a bottom toolbar (the voice surface shares its row, in PEPO's column). */
 const DOCK = 92
-/** The voice surface's top, measured from the bottom of the screen. */
-const VOICE_TOP = 190
+/** Room kept at the bottom when nothing sits under the work. */
+const EDGE = 28
+/** Room kept for a toolbar at the left or right edge. */
+const RAIL = 76
+/** The voice surface's top (with its transcript), measured from the bottom: it sits on the toolbar's row. */
+const VOICE_TOP = 110
 /** Room kept under PEPO for its words. */
 const CAPTION_ROOM = 76
 const MIN_H = 150
@@ -52,6 +60,8 @@ const BODY_W = 0.82
 export interface LayoutOptions {
   /** Which side PEPO takes on wide screens; by default it follows the user's arrangement. */
   side?: 'left' | 'right'
+  /** Where the toolbar sits; a hidden (auto-hide) toolbar takes no room. */
+  dock?: { side: 'bottom' | 'left' | 'right'; hidden?: boolean }
 }
 
 export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stage = stageSize(W, H), opts: LayoutOptions = {}): SpatialLayout {
@@ -71,9 +81,13 @@ export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stag
     }
   }
   const empty = { x: W / 2, y: H * 0.7, w: Math.min(560, W - 40) }
+  const dockAt = opts.dock?.hidden ? null : (opts.dock?.side ?? 'bottom')
+  const L = dockAt === 'left' ? RAIL : 0
+  const R = dockAt === 'right' ? RAIL : 0
+  const middle = { x: W / 2 }
 
   if (shownAll.length === 0) {
-    return { presence: { x: W / 2, y: H * (W <= 640 ? 0.4 : 0.41), scale: 1 }, caption: empty, rects, mode: W <= 640 ? 'sheet' : W < 1024 ? 'tablet' : 'desktop' }
+    return { presence: { x: W / 2, y: H * (W <= 640 ? 0.4 : 0.41), scale: 1 }, caption: empty, dock: middle, rects, mode: W <= 640 ? 'sheet' : W < 1024 ? 'tablet' : 'desktop' }
   }
 
   if (W <= 640) {
@@ -86,12 +100,13 @@ export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stag
     // Room under the sheet for PEPO's line and the voice control.
     rects[latest.id] = { x: 10, y: top, w: W - 20, h: H - top - 140 }
     for (const w of windows) if (!rects[w.id]) rects[w.id] = { ...rects[latest.id] }
-    return { presence: { x: W / 2, y, scale: s }, caption: empty, rects, mode: 'sheet' }
+    return { presence: { x: W / 2, y, scale: s }, caption: empty, dock: middle, rects, mode: 'sheet' }
   }
 
   let presence: SpatialLayout['presence']
   let caption: SpatialLayout['caption']
   let voice: SpatialLayout['voice']
+  let dock = middle
   let region: Rect
   let mode: SpatialLayout['mode']
 
@@ -100,9 +115,9 @@ export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stag
     // other. Left by default; right when the user has moved their work to the
     // left (or the runtime asks for it). With a full workspace PEPO rises to
     // the upper corner, so its words sit clear of the work below it. The
-    // voice control follows PEPO into its column, so the work can reach down
-    // to the dock.
-    const col = Math.min(600, Math.max(260, W * 0.36))
+    // voice control follows PEPO into its column, on the toolbar's row, so the
+    // work can reach down to the toolbar. A toolbar at an edge keeps its strip.
+    const col = Math.min(600, Math.max(260, (W - L - R) * 0.36))
     const voiceTop = H - VOICE_TOP
     const s = Math.min(0.8, col / (stage * BODY_W), (voiceTop - CAPTION_ROOM - HEADER - 8) / (stage * (BODY_BOTTOM - BODY_TOP)))
     const lean = placed.reduce((sum, w) => sum + w.placed!.w * w.placed!.h * (w.placed!.x + w.placed!.w / 2 - W / 2), 0)
@@ -111,12 +126,13 @@ export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stag
     const top = HEADER + 8 + (0.5 - BODY_TOP) * stage * s
     const lowest = voiceTop - CAPTION_ROOM - (BODY_BOTTOM - 0.5) * stage * s
     const y = upper ? top : Math.max(top, Math.min(H * 0.41, lowest))
-    presence = { x: side === 'left' ? 24 + col / 2 : W - 24 - col / 2, y, scale: s }
+    presence = { x: side === 'left' ? L + 24 + col / 2 : W - R - 24 - col / 2, y, scale: s }
     caption = { x: presence.x, y: y + (BODY_BOTTOM - 0.5) * stage * s + 14, w: col - 8 }
     voice = { x: presence.x, w: col - 8 }
-    const regionX = side === 'left' ? 24 + col + 24 : 28
-    const regionW = side === 'left' ? W - regionX - 28 : W - col - 24 - 24 - 28
-    region = { x: regionX, y: HEADER + 14, w: regionW, h: H - HEADER - 14 - DOCK }
+    const regionX = side === 'left' ? L + 24 + col + 24 : L + 28
+    const regionW = side === 'left' ? W - R - regionX - 28 : W - R - col - 24 - 24 - regionX
+    region = { x: regionX, y: HEADER + 14, w: regionW, h: H - HEADER - 14 - (dockAt === 'bottom' ? DOCK : EDGE) }
+    dock = { x: regionX + regionW / 2 }
     mode = W >= 1024 ? 'desktop' : 'tablet'
   } else {
     // Stacked: PEPO above, its words under it, the work below.
@@ -126,7 +142,9 @@ export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stag
     presence = { x: W / 2, y, scale: s }
     caption = { x: W / 2, y: y + (BODY_BOTTOM - 0.5) * stage * s + 6, w: Math.min(560, W - 40) }
     const top = caption.y + 52
-    region = { x: 20, y: top, w: W - 40, h: H - top - BOTTOM }
+    // The voice control sits over a bottom toolbar here, hidden or not.
+    const overBar = (opts.dock?.side ?? 'bottom') === 'bottom'
+    region = { x: 20 + L, y: top, w: W - 40 - L - R, h: H - top - (overBar ? BOTTOM : VOICE_ONLY) }
     mode = 'tablet'
   }
 
@@ -177,5 +195,5 @@ export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stag
     })
   }
   keepPlaced()
-  return { presence, caption, voice, rects, mode }
+  return { presence, caption, voice, dock, rects, mode }
 }

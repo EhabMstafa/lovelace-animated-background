@@ -64,7 +64,7 @@ describe('computeLayout', () => {
       const words = { x: caption.x - caption.w / 2, y: caption.y, w: caption.w, h: 44 }
       // Side by side the voice control sits in PEPO's column, under its words;
       // stacked, it stays centred under the work.
-      const control = voice ? { x: voice.x - voice.w / 2, y: H - 190, w: voice.w, h: 82 } : null
+      const control = voice ? { x: voice.x - voice.w / 2, y: H - 110, w: voice.w, h: 84 } : null
       if (control) expect(words.y + words.h).toBeLessThanOrEqual(control.y)
       for (const r of Object.values(rects)) {
         expect(overlaps(words, r)).toBe(false)
@@ -114,5 +114,25 @@ describe('computeLayout', () => {
     expect(mode).toBe('sheet')
     expect(presence.y).toBeLessThan(844 * 0.3)
     expect(rects['notes-2'].w).toBe(370)
+  })
+
+  it('keeps the toolbar\'s strip free at the left or right, and gives a hidden toolbar no room', () => {
+    const windows = [win('map', 1), win('notes', 2), win('terminal', 3)]
+    for (const [W, H] of [[1536, 864], [1280, 720], [800, 700]]) {
+      const left = computeLayout(windows, W, H, undefined, { dock: { side: 'left' } })
+      const right = computeLayout(windows, W, H, undefined, { dock: { side: 'right' } })
+      for (const r of Object.values(left.rects)) expect(r.x).toBeGreaterThanOrEqual(76)
+      for (const r of Object.values(right.rects)) expect(r.x + r.w).toBeLessThanOrEqual(W - 76)
+      // PEPO's body stays clear of the strip too.
+      const S = stageSize(W, H) * left.presence.scale
+      expect(left.presence.x - 0.41 * S).toBeGreaterThanOrEqual(76 - 1)
+      // With no toolbar at the bottom the work reaches lower.
+      const bottom = computeLayout(windows, W, H)
+      const low = (l: typeof bottom) => Math.max(...Object.values(l.rects).map((r) => r.y + r.h))
+      expect(low(left)).toBeGreaterThan(low(bottom))
+      const hidden = computeLayout(windows, W, H, undefined, { dock: { side: 'bottom', hidden: true } })
+      // Side by side, a hidden toolbar takes no room (stacked, the voice control still sits over its place).
+      if (W >= H * 1.15) expect(low(hidden)).toBeGreaterThan(low(bottom))
+    }
   })
 })

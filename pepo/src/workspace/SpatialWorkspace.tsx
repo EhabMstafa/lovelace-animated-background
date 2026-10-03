@@ -21,6 +21,7 @@ import {
   SquareTerminal,
   type LucideIcon,
 } from 'lucide-react'
+import { useDockPrefs } from '../core/dockPrefs'
 import { pepoEvents } from '../core/events'
 import { presence } from '../core/presence'
 import { useWorkspace, workspace, type ToolKind, type WorkspaceWindow } from '../core/workspace'
@@ -153,7 +154,11 @@ function SurfaceBoundary({ kind, children }: { kind: ToolKind; children: ReactNo
 export function SpatialWorkspace() {
   const windows = useWorkspace()
   const { w, h } = useViewport()
-  const layout = useMemo(() => computeLayout(windows, w, h), [windows, w, h])
+  const prefs = useDockPrefs()
+  // Phones keep the toolbar under the voice control, always shown.
+  const dockSide = w <= 640 ? 'bottom' : prefs.side
+  const dockHidden = w > 640 && prefs.autoHide
+  const layout = useMemo(() => computeLayout(windows, w, h, undefined, { dock: { side: dockSide, hidden: dockHidden } }), [windows, w, h, dockSide, dockHidden])
 
   // Move PEPO's presence (the WebGL stage and its reflection) with the layout.
   const visible = windows.filter((win) => !win.minimized)
@@ -166,12 +171,22 @@ export function SpatialWorkspace() {
     root.style.setProperty('--caption-x', `${layout.caption.x}px`)
     root.style.setProperty('--caption-y', `${layout.caption.y}px`)
     root.style.setProperty('--caption-w', `${layout.caption.w}px`)
+    // The voice control sits on the toolbar's row: in PEPO's column while it
+    // works aside, else in the middle, next to a bottom toolbar on wide
+    // screens (a "row"), above it on narrow ones (a "stack").
     const side = busy && layout.voice
-    root.style.setProperty('--voice-dx', side ? `${layout.voice!.x - w / 2}px` : '0px')
-    root.style.setProperty('--voice-w', side ? `${layout.voice!.w}px` : '100vw')
-    root.dataset.voice = side ? 'side' : 'centre'
+    // A hidden bottom toolbar still keeps its place on the row, so it never
+    // appears over the voice control.
+    const bottomBar = dockSide === 'bottom'
+    const voiceMode = w <= 640 ? 'stack' : side ? 'side' : !bottomBar ? 'centre' : !busy && w >= 900 ? 'row' : 'stack'
+    root.style.setProperty('--voice-x', side ? `${layout.voice!.x}px` : '50%')
+    root.style.setProperty('--voice-w', side ? `${layout.voice!.w}px` : 'min(560px, 86vw)')
+    root.style.setProperty('--dock-x', busy ? `${layout.dock.x}px` : '50%')
+    root.dataset.voice = voiceMode
+    root.dataset.dock = dockSide
+    root.dataset.dockHide = String(dockHidden)
     root.dataset.workspace = busy ? layout.mode : 'empty'
-  }, [layout, visible.length, w])
+  }, [layout, visible.length, w, dockSide, dockHidden])
 
   // Escape puts the work away into the dock (when PEPO isn't listening and
   // nothing is being typed). Nothing is closed: the arrangement comes back.

@@ -48,6 +48,17 @@ export function VoiceSurface({ captureMic = true }: { captureMic?: boolean }) {
   const [draft, setDraft] = useState('')
   const input = useRef<HTMLInputElement>(null)
   const micButton = useRef<HTMLButtonElement>(null)
+  const command = useRef<HTMLDivElement>(null)
+
+  // Its width, for placing it beside the toolbar (CSS variables, no re-render).
+  useEffect(() => {
+    const el = command.current
+    if (!el) return
+    const root = document.documentElement
+    const ro = new ResizeObserver(() => root.style.setProperty('--cmd-w', `${el.offsetWidth}px`))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   useMicrophoneEnergy(captureMic && listening)
 
@@ -119,6 +130,7 @@ export function VoiceSurface({ captureMic = true }: { captureMic?: boolean }) {
 
       <motion.div
         layout
+        ref={command}
         className={`command surface ${listening ? 'is-listening' : ''} ${busy ? 'is-busy' : ''} ${typing ? 'is-typing' : ''}`}
         transition={{ layout: { duration: 0.36, ease: ease.out } }}
       >

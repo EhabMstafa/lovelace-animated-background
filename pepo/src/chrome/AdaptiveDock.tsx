@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   BookOpen,
+  Brain,
+  House,
+  PanelsTopLeft,
+  Settings2,
   CalendarDays,
   Clapperboard,
   CodeXml,
@@ -20,6 +24,7 @@ import {
   SquareTerminal,
   type LucideIcon,
 } from 'lucide-react'
+import { useDockPrefs } from '../core/dockPrefs'
 import { pepoEvents } from '../core/events'
 import { useWorkspace, workspace } from '../core/workspace'
 import { ease } from '../core/tokens'
@@ -48,6 +53,17 @@ export const TOOLS: Record<string, DockTool> = {
   media: { id: 'media', label: 'Media', icon: Music },
   conversation: { id: 'conversation', label: 'Conversation', icon: MessagesSquare },
 }
+
+/** Places (what the navigation rail used to hold), at the start of the toolbar. */
+const PLACES: (DockTool & { kind?: string })[] = [
+  { id: 'home', label: 'Home', icon: House },
+  { id: 'workspace', label: 'Workspace', icon: PanelsTopLeft },
+  { id: 'conversations', label: 'Conversations', icon: MessagesSquare, kind: 'conversation' },
+  { id: 'memory', label: 'Memory', icon: Brain, kind: 'memory' },
+]
+const SETTINGS: DockTool & { kind: string } = { id: 'settings', label: 'Settings', icon: Settings2, kind: 'settings' }
+/** Kinds the places already open; they don't repeat among the tools. */
+const PLACE_KINDS = new Set(['conversation', 'memory', 'settings'])
 
 /** Tools closed recently stay within reach for a while. */
 const RECENT_MS = 10 * 60_000
@@ -89,12 +105,21 @@ function openTool(id: string) {
   if (open) workspace.focus(open.id)
 }
 
+const go = (destination: string) => pepoEvents.emit('navigate', { destination })
+
 /**
- * An intelligent tool shelf, not a launcher. It carries only what is
- * useful now; everything else sits behind "More".
+ * PEPO's one toolbar: places (home, workspace, conversations, memory), then
+ * an intelligent tool shelf, not a launcher (only what is useful now;
+ * everything else sits behind "More"), then settings. It sits at the bottom,
+ * left or right, and can hide until the pointer reaches its edge (Settings).
  */
 export function AdaptiveDock({ pinned: pinnedTools = ['browser', 'files', 'terminal', 'notes'], relevant: suggested = [], compact = false }: AdaptiveDockProps) {
   const pinned = compact ? [] : pinnedTools
+  const prefs = useDockPrefs()
+  // Phones keep it under the voice control, always shown.
+  const side = compact ? 'bottom' : prefs.side
+  const autoHide = !compact && prefs.autoHide
+  const vertical = side !== 'bottom'
   const ref = useRef<HTMLDivElement>(null)
   const [hovered, setHovered] = useState<string | null>(null)
   const [shelf, setShelf] = useState(false)
@@ -112,7 +137,38 @@ export function AdaptiveDock({ pinned: pinnedTools = ['browser', 'files', 'termi
   )
   const recentIds = recent.filter((r) => Date.now() - r.at < RECENT_MS && !openKinds.has(r.id)).map((r) => r.id).slice(0, RECENT_MAX)
   // Pinned tools, then whatever is open (or put away), then what was used recently.
-  const relevant = compact ? [] : [...new Set([...suggested, ...windows.map((w) => w.kind as string), ...recentIds])].filter((id) => !pinned.includes(id) && TOOLS[id])
+  const relevant = compact ? [] : [...new Set([...suggested, ...windows.map((w) => w.kind as string), ...recentIds])].filter((id) => !pinned.includes(id) && !PLACE_KINDS.has(id) && TOOLS[id])
+
+  // Auto-hide: shown while the pointer is at its edge or on it, while it has
+  // keyboard focus, and while the shelf is open.
+  const [revealed, setRevealed] = useState(false)
+  const hideTimer = useRef(0)
+  const reveal = () => {
+    window.clearTimeout(hideTimer.current)
+    setRevealed(true)
+  }
+  const conceal = () => {
+    window.clearTimeout(hideTimer.current)
+    hideTimer.current = window.setTimeout(() => setRevealed(false), 700)
+  }
+  useEffect(() => () => window.clearTimeout(hideTimer.current), [])
+  const hidden = autoHide && !revealed && !shelf
+  useEffect(() => {
+    document.documentElement.dataset.dockShown = String(!hidden)
+  }, [hidden])
+
+  // Its size, for placing the voice control beside it (CSS variables, no re-render).
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const root = document.documentElement
+    const ro = new ResizeObserver(() => {
+      root.style.setProperty('--dock-w', `${el.offsetWidth}px`)
+      root.style.setProperty('--dock-h', `${el.offsetHeight}px`)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   // "Tools" in the navigation opens the shelf.
   useEffect(
@@ -147,6 +203,31 @@ export function AdaptiveDock({ pinned: pinnedTools = ['browser', 'files', 'termi
     if (!el) return
     const rect = el.getBoundingClientRect()
     el.style.setProperty('--lx', `${e.clientX - rect.left}px`)
+    el.style.setProperty('--ly', `${e.clientY - rect.top}px`)
+  }
+
+  const renderPlace = (place: DockTool & { kind?: string }) => {
+    const Icon = place.icon
+    const isOpen = !!place.kind && openKinds.has(place.kind)
+    return (
+      <motion.button
+        key={place.id}
+        layout
+        className={`dock-item is-place ${isOpen ? 'is-open' : ''}`}
+        aria-label={place.label}
+        onPointerEnter={() => setHovered(place.id)}
+        onPointerLeave={() => setHovered((h) => (h === place.id ? null : h))}
+        onFocus={() => setHovered(place.id)}
+        onBlur={() => setHovered(null)}
+        onClick={() => go(place.id)}
+      >
+        <span className="dock-icon">
+          <Icon size={18} strokeWidth={1.35} />
+        </span>
+        <Tip show={hovered === place.id} label={place.label} />
+        {isOpen && <span className="dock-relevance" aria-hidden="true" />}
+      </motion.button>
+    )
   }
 
   const renderTool = (id: string, transient = false) => {
@@ -179,19 +260,51 @@ export function AdaptiveDock({ pinned: pinnedTools = ['browser', 'files', 'termi
   }
 
   return (
-    <div className={`dock-wrap ${compact ? 'is-compact' : ''}`}>
+    <>
+    {autoHide && (
+      <div className={`dock-sensor is-${side} ${revealed ? 'is-revealed' : ''}`} aria-hidden="true" onPointerEnter={reveal} />
+    )}
+    <div
+      className={`dock-wrap is-${side} ${vertical ? 'is-vertical' : ''} ${compact ? 'is-compact' : ''} ${hidden ? 'is-hidden' : ''}`}
+      onPointerEnter={autoHide ? reveal : undefined}
+      onPointerLeave={autoHide ? conceal : undefined}
+      onFocus={autoHide ? reveal : undefined}
+      onBlur={
+        autoHide
+          ? (e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) conceal()
+            }
+          : undefined
+      }
+    >
     <AnimatePresence>
       {shelf && (
         <motion.div
           className="tool-shelf surface"
           role="menu"
           aria-label="All tools"
-          initial={{ opacity: 0, y: 8, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 6, scale: 0.98 }}
+          initial={{ opacity: 0, [vertical ? 'x' : 'y']: side === 'right' ? -8 : 8, scale: 0.97 }}
+          animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.98 }}
           transition={{ duration: 0.22, ease: ease.out }}
         >
-          {Object.values(TOOLS).map(({ id, label, icon: Icon }) => (
+          {/* Phones have no room for places on the toolbar: they head the shelf. */}
+          {compact &&
+            [...PLACES, SETTINGS].map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                role="menuitem"
+                onClick={() => {
+                  go(id)
+                  setShelf(false)
+                }}
+              >
+                <Icon size={18} strokeWidth={1.35} />
+                <span>{label}</span>
+              </button>
+            ))}
+          {compact && <span className="shelf-divider" aria-hidden="true" />}
+          {Object.values(TOOLS).filter(({ id }) => !PLACE_KINDS.has(id)).map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               role="menuitem"
@@ -208,7 +321,17 @@ export function AdaptiveDock({ pinned: pinnedTools = ['browser', 'files', 'termi
         </motion.div>
       )}
     </AnimatePresence>
-    <motion.div layout ref={ref} className="dock surface" onPointerMove={onMove} role="toolbar" aria-label="Tools">
+    <motion.div
+      layout
+      ref={ref}
+      className="dock surface"
+      onPointerMove={onMove}
+      role="toolbar"
+      aria-label="PEPO"
+      aria-orientation={vertical ? 'vertical' : 'horizontal'}
+    >
+      {!compact && PLACES.map(renderPlace)}
+      {!compact && <span className="dock-divider" />}
       {pinned.map((id) => renderTool(id))}
       <AnimatePresence initial={false}>
         {relevant.length > 0 && <motion.span key="divider" layout className="dock-divider" />}
@@ -232,7 +355,9 @@ export function AdaptiveDock({ pinned: pinnedTools = ['browser', 'files', 'termi
         </span>
         <Tip show={hovered === 'more' && !shelf} label="More" />
       </motion.button>
+      {!compact && renderPlace(SETTINGS)}
     </motion.div>
     </div>
+    </>
   )
 }
