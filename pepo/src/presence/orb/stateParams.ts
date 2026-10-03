@@ -52,6 +52,14 @@ export const ORB_STATES: Record<PresenceState, OrbParams> = {
   speaking: { ...base, spin: 0.04, speak: 1, violet: 0.18, depth: 0.4, glow: 1.12 },
   working: { ...base, spin: 0.05, converge: 0.04, organize: 0.8, depth: 0.6, violet: 0.32, activity: 0.55, glow: 1.05 },
   waiting: { ...base, spin: 0.025, breath: 0.012, glow: 0.88 },
+  // The user is about to speak or type: a little nearer and brighter, still calm.
+  attentive: { ...base, scale: 1.02, spin: 0.03, breath: 0.011, glow: 1.06, violet: 0.07 },
+  // Speech stopped mid-phrase: the light gathers in quickly and quiets.
+  interrupted: { ...base, scale: 1.03, spin: 0.03, converge: 0.05, breath: 0.006, listen: 0.4, glow: 1.0, violet: 0.05 },
+  // Done: ordered and bright for a moment, then back to rest.
+  success: { ...base, spin: 0.045, organize: 0.7, depth: 0.35, glow: 1.16, violet: 0.06 },
+  // Something failed: dimmer and slower, never an alarm.
+  error: { ...base, spin: 0.018, converge: 0.03, breath: 0.009, glow: 0.8, violet: 0.02 },
 }
 
 export const PARAM_KEYS = Object.keys(base) as (keyof OrbParams)[]

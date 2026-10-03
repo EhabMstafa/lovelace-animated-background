@@ -1,11 +1,6 @@
-import type { WorkspaceWindow } from '../core/workspace'
+import type { Rect, WorkspaceWindow } from '../core/workspace'
 
-export interface Rect {
-  x: number
-  y: number
-  w: number
-  h: number
-}
+export type { Rect }
 
 export interface SpatialLayout {
   /** Where PEPO's presence sits (stage centre, in px) and how large. */
@@ -18,7 +13,7 @@ export interface SpatialLayout {
 }
 
 /** Larger, richer tools take the prime position. */
-const PRIORITY = ['map', 'browser', 'code', 'images', 'files', 'notes', 'terminal']
+const PRIORITY = ['map', 'browser', 'code', 'images', 'files', 'notes', 'conversation', 'terminal']
 
 const GAP = 14
 const HEADER = 64
@@ -45,11 +40,25 @@ const BODY_W = 0.82
  * surfaces settle into a calm arrangement next to it. Only as many
  * surfaces as fit comfortably are shown: the one in front, then the richest.
  */
-export function computeLayout(windows: WorkspaceWindow[], W: number, H: number, stage = stageSize(W, H)): SpatialLayout {
+export function computeLayout(all: WorkspaceWindow[], W: number, H: number, stage = stageSize(W, H)): SpatialLayout {
   const rects: Record<string, Rect> = {}
+  // Put-away surfaces take no space. Surfaces the user moved or resized keep
+  // their own rect (kept on screen) but still hold their slot in PEPO's
+  // arrangement, so their neighbours don't jump to fill it.
+  const shownAll = all.filter((w) => !w.minimized)
+  const placed = W > 640 ? shownAll.filter((w) => w.placed) : []
+  const windows = shownAll
+  const keepPlaced = () => {
+    for (const w of placed) {
+      const p = w.placed!
+      const pw = Math.min(p.w, W - 16)
+      const ph = Math.min(p.h, H - 120)
+      rects[w.id] = { x: Math.min(Math.max(8, p.x), W - pw - 8), y: Math.min(Math.max(56, p.y), H - ph - 60), w: pw, h: ph }
+    }
+  }
   const empty = { x: W / 2, y: H * 0.7, w: Math.min(560, W - 40) }
 
-  if (windows.length === 0) {
+  if (shownAll.length === 0) {
     return { presence: { x: W / 2, y: H * (W <= 640 ? 0.4 : 0.41), scale: 1 }, caption: empty, rects, mode: W <= 640 ? 'sheet' : W < 1024 ? 'tablet' : 'desktop' }
   }
 
@@ -99,7 +108,11 @@ export function computeLayout(windows: WorkspaceWindow[], W: number, H: number, 
   // The surface just opened or brought forward is always shown; the richest tools fill the rest.
   const byPriority = (a: WorkspaceWindow, b: WorkspaceWindow) => PRIORITY.indexOf(a.kind) - PRIORITY.indexOf(b.kind) || a.openedAt - b.openedAt
   const front = windows.reduce((a, b) => (b.z > a.z ? b : a))
-  const shown = [front, ...windows.filter((w) => w !== front).sort(byPriority)].slice(0, capacity)
+  const rest = windows.filter((w) => w !== front)
+  const shown = [front, ...rest.filter((w) => placed.includes(w)), ...rest.filter((w) => !placed.includes(w)).sort(byPriority)].slice(
+    0,
+    Math.max(capacity, placed.length + 1),
+  )
   const ordered = shown.sort(byPriority)
   const n = ordered.length
 
@@ -131,5 +144,6 @@ export function computeLayout(windows: WorkspaceWindow[], W: number, H: number, 
       rects[win.id] = { x: x + (i % c) * (cw + GAP), y: y + Math.floor(i / c) * (rh + GAP), w: cw, h: rh }
     })
   }
+  keepPlaced()
   return { presence, caption, rects, mode }
 }

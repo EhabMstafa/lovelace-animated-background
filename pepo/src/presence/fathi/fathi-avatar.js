@@ -291,7 +291,7 @@ const FINISH_GLSL=`
 export async function createFathiAvatar(canvas, opts={}){
   const inspection = opts.inspection === true;
   const animated=opts.motion===true || (!inspection && opts.motion!==false);
-  const controller=createMotionController();
+  const controller=opts.controller||createMotionController(); // PEPO: a motion controller may be passed in; FATHI's own is the default.
   const sourceDepth = inspection && opts.depthMode === 'source';
   let refined = !(inspection && ['source','base'].includes(opts.depthMode));
   const mobile = matchMedia('(max-width:700px)').matches;

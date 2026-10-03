@@ -69,6 +69,7 @@ export function VoiceSurface({ captureMic = true }: { captureMic?: boolean }) {
 
   useEffect(() => {
     if (typing) input.current?.focus()
+    pepoEvents.emit('inputFocus', { active: typing })
   }, [typing])
 
   // Mic halo follows live energy without re-rendering.

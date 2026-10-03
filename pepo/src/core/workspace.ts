@@ -1,7 +1,14 @@
 import { useSyncExternalStore } from 'react'
 
 /** Tools PEPO can place on the workspace. */
-export type ToolKind = 'map' | 'notes' | 'terminal' | 'browser' | 'files' | 'code' | 'images'
+export type ToolKind = 'map' | 'notes' | 'terminal' | 'browser' | 'files' | 'code' | 'images' | 'conversation'
+
+export interface Rect {
+  x: number
+  y: number
+  w: number
+  h: number
+}
 
 export interface WorkspaceWindow {
   id: string
@@ -14,6 +21,10 @@ export interface WorkspaceWindow {
   active: boolean
   /** Surface content, owned by whoever drives the tool (the runtime). */
   data: Record<string, unknown>
+  /** Put away in the dock; still open, restored by focusing it. */
+  minimized: boolean
+  /** Where the user moved or resized it. Null: PEPO arranges it. */
+  placed: Rect | null
 }
 
 type Listener = () => void
@@ -47,15 +58,33 @@ class WorkspaceStore {
       return existing.id
     }
     const id = `${kind}-${++this.seq}`
-    this.set([...this.windows, { id, kind, title, openedAt: performance.now(), z: ++this.zSeq, active: false, data }])
+    this.set([...this.windows, { id, kind, title, openedAt: performance.now(), z: ++this.zSeq, active: false, data, minimized: false, placed: null }])
     return id
   }
-  /** Brings a surface to the front. */
+  /** Brings a surface to the front, restoring it if it was put away. */
   focus(id: string) {
     const win = this.windows.find((w) => w.id === id)
-    if (!win || win.z === this.zSeq) return
-    const z = ++this.zSeq
-    this.set(this.windows.map((w) => (w.id === id ? { ...w, z } : w)))
+    if (!win || (win.z === this.zSeq && !win.minimized)) return
+    const z = win.z === this.zSeq ? win.z : ++this.zSeq
+    this.set(this.windows.map((w) => (w.id === id ? { ...w, z, minimized: false } : w)))
+  }
+  /** Puts a surface away in the dock without closing it. */
+  minimize(id: string) {
+    this.set(this.windows.map((w) => (w.id === id ? { ...w, minimized: true } : w)))
+  }
+  /** Puts every surface away (PEPO returns to the centre; nothing is lost). */
+  minimizeAll() {
+    if (this.windows.every((w) => w.minimized)) return
+    this.set(this.windows.map((w) => ({ ...w, minimized: true })))
+  }
+  /** Brings every surface back. */
+  restoreAll() {
+    if (!this.windows.some((w) => w.minimized)) return
+    this.set(this.windows.map((w) => ({ ...w, minimized: false })))
+  }
+  /** Keeps the user's own position and size for a surface (null hands it back to PEPO's arrangement). */
+  place(id: string, rect: Rect | null) {
+    this.set(this.windows.map((w) => (w.id === id ? { ...w, placed: rect } : w)))
   }
   update(id: string, patch: Partial<Pick<WorkspaceWindow, 'title' | 'active'>> & { data?: Record<string, unknown> }) {
     this.set(

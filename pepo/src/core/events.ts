@@ -11,12 +11,20 @@ export interface PEPOEventMap {
   voiceStart: void
   voiceStop: void
   textSubmit: { text: string }
+  /** The user opened (or closed) the keyboard input: they are about to address PEPO. */
+  inputFocus: { active: boolean }
   toolOpen: { toolId: string }
   toolClose: { toolId: string }
   navigate: { destination: string }
   presenceChange: { from: PresenceState; to: PresenceState }
   /** The viewer chose which body PEPO wears. */
   formChange: { form: PresenceForm }
+  /**
+   * Meaning the runtime attaches to what PEPO is saying (a question, an
+   * emphasis, agreement…). The Avatar answers with a restrained gesture;
+   * head motion never follows the loudness of the voice.
+   */
+  cue: { kind: 'nod' | 'agree' | 'strongAgree' | 'question' | 'emphasis' | 'consider' | 'conclude' | 'lookLeft' | 'lookRight' }
   workspaceAction: { action: string; payload?: unknown }
 }
 
@@ -32,7 +40,9 @@ class EventBus {
       this.handlers.set(event, set)
     }
     set.add(handler as Handler<never>)
-    return () => set!.delete(handler as Handler<never>)
+    return () => {
+      set!.delete(handler as Handler<never>)
+    }
   }
 
   emit<K extends keyof PEPOEventMap>(

@@ -5,9 +5,10 @@ import { PRESENCE_STATES, presence, usePresence, type PresenceState } from '../c
 const ENERGY_STATES = new Set<PresenceState>(['listening', 'speaking'])
 
 /**
- * DEMO ONLY: review tool for the presence language. Keys 1–7 switch
+ * DEMO ONLY: review tool for the presence language. Keys 1–9, 0 and - switch
  * states; the corner label reveals the list. (A, Orb/Avatar, lives in the header toggle.)
  */
+const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-']
 export function StatePicker() {
   const { state } = usePresence()
   const [open, setOpen] = useState(false)
@@ -21,8 +22,8 @@ export function StatePicker() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
       if (t.tagName === 'INPUT' || e.metaKey || e.ctrlKey || e.altKey) return
-      const n = Number(e.key)
-      if (n >= 1 && n <= PRESENCE_STATES.length) pick(PRESENCE_STATES[n - 1])
+      const i = KEYS.indexOf(e.key)
+      if (i >= 0 && i < PRESENCE_STATES.length) pick(PRESENCE_STATES[i])
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -60,7 +61,7 @@ export function StatePicker() {
             {PRESENCE_STATES.map((s, i) => (
               <li key={s}>
                 <button className={s === state ? 'is-active' : ''} onClick={() => pick(s)}>
-                  <kbd>{i + 1}</kbd>
+                  <kbd>{KEYS[i]}</kbd>
                   {s}
                 </button>
               </li>

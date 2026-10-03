@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTheme, type Theme } from '../core/theme'
 import { mulberry32 } from '../presence/orb/geometry'
 import { ridge } from './ridges'
@@ -199,29 +199,52 @@ function paint(canvas: HTMLCanvasElement, theme: Theme) {
   ctx.fillRect(0, hy, w, 1)
 }
 
+/**
+ * Two canvases: on a theme change the new scene is painted into the hidden
+ * one and cross-faded in (~300 ms), so the switch never flashes.
+ */
 export function AmbientBackground() {
-  const canvas = useRef<HTMLCanvasElement>(null)
+  const a = useRef<HTMLCanvasElement>(null)
+  const b = useRef<HTMLCanvasElement>(null)
   const current = useTheme()
+  const [front, setFront] = useState<'a' | 'b'>('a')
+  const shown = useRef<'a' | 'b'>('a')
+  const painted = useRef<Theme | null>(null)
 
+  // Theme changes: paint the hidden canvas, then bring it to the front.
   useEffect(() => {
-    const el = canvas.current
+    if (painted.current === current) return
+    const first = painted.current === null
+    const target = first ? shown.current : shown.current === 'a' ? 'b' : 'a'
+    const el = (target === 'a' ? a : b).current
     if (!el) return
+    paint(el, current)
+    painted.current = current
+    shown.current = target
+    setFront(target)
+  }, [current])
+
+  // Resizes repaint whichever canvas is showing.
+  useEffect(() => {
     let raf = 0
     const draw = () => {
       cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => paint(el, current))
+      raf = requestAnimationFrame(() => {
+        const el = (shown.current === 'a' ? a : b).current
+        if (el && painted.current) paint(el, painted.current)
+      })
     }
-    paint(el, current)
     window.addEventListener('resize', draw)
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', draw)
     }
-  }, [current])
+  }, [])
 
   return (
     <div className="ambient" aria-hidden="true">
-      <canvas ref={canvas} className="ambient-canvas parallax-far" />
+      <canvas ref={a} className={`ambient-canvas parallax-far ${front === 'a' ? 'is-front' : ''}`} />
+      <canvas ref={b} className={`ambient-canvas parallax-far ${front === 'b' ? 'is-front' : ''}`} />
       <div className="ambient-orb-reflection" />
       <div className="ambient-vignette" />
     </div>

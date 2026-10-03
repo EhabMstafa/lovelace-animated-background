@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ToolKind, WorkspaceWindow } from '../core/workspace'
 import { computeLayout, stageSize, type Rect } from './layout'
 
-const win = (kind: ToolKind, i: number): WorkspaceWindow => ({ id: `${kind}-${i}`, kind, title: kind, openedAt: i, z: i, active: false, data: {} })
+const win = (kind: ToolKind, i: number): WorkspaceWindow => ({ id: `${kind}-${i}`, kind, title: kind, openedAt: i, z: i, active: false, data: {}, minimized: false, placed: null })
 const overlaps = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 
 describe('computeLayout', () => {
@@ -65,6 +65,26 @@ describe('computeLayout', () => {
         expect(r.y + r.h).toBeLessThanOrEqual(H - 160)
       }
     }
+  })
+
+  it('gives put-away surfaces no space, and PEPO returns to the centre when all are away', () => {
+    const windows = [win('map', 1), { ...win('notes', 2), minimized: true }]
+    const { rects } = computeLayout(windows, 1536, 864)
+    expect(rects['map-1']).toBeDefined()
+    expect(rects['notes-2']).toBeUndefined()
+    const away = computeLayout(windows.map((w) => ({ ...w, minimized: true })), 1536, 864)
+    expect(away.presence.scale).toBe(1)
+    expect(away.presence.x).toBe(768)
+  })
+
+  it("keeps a surface where the user put it, on screen", () => {
+    const placed = { ...win('notes', 2), placed: { x: 40, y: 500, w: 420, h: 300 } }
+    const { rects } = computeLayout([win('map', 1), placed], 1536, 864)
+    expect(rects['notes-2']).toEqual({ x: 40, y: 500, w: 420, h: 300 })
+    const off = computeLayout([{ ...placed, placed: { x: 1400, y: 800, w: 420, h: 300 } }], 1536, 864)
+    const r = off.rects['notes-2']
+    expect(r.x + r.w).toBeLessThanOrEqual(1536)
+    expect(r.y + r.h).toBeLessThanOrEqual(864)
   })
 
   it('opens tools as a bottom sheet on phones', () => {

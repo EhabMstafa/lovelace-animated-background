@@ -25,14 +25,17 @@ npm test         # unit tests: workspace layout and store
 | Click the mic, or press **Space** | Listen. A demo transcript plays, then PEPO understands, thinks and answers in whichever form is selected |
 | Press **/**, or click the keyboard icon | Type instead of talking |
 | Say or type "plan a trip to Norway", or press **W** | The work scene: PEPO steps aside and opens a map, notes and a terminal |
-| Click a tool in the dock | Opens that tool as a surface, or brings it forward if it's open |
+| Click a tool in the dock | Opens that tool as a surface, brings it forward if it's open, or restores it if it was put away |
+| Drag a surface's header; drag its bottom-right corner | Move it; resize it. It stays where you put it (double-click the header to let PEPO arrange it again) |
+| **–** on a surface | Put it away in the dock (hollow dot); click the dock icon to restore it |
 | Click **More** in the dock | A shelf with every tool |
 | Click **Local** in the header | Status on demand: where PEPO runs, privacy, each service |
-| Press **Esc** (when not listening or typing) | Puts the work away; PEPO returns to the centre |
-| Press **1–7**, or use the state label in the corner | Jump straight to a presence state for review |
-| **Orb / Avatar** toggle in the header, or press **A** | Choose which body PEPO wears (remembered per browser); switching cross-fades between them |
+| Press **Esc** (when not listening or typing) | Puts every surface away in the dock (nothing is closed); PEPO returns to the centre |
+| Click the mic while PEPO is speaking | Interrupts: speech stops, PEPO turns its attention to you and listens |
+| Press **1–9, 0, -**, or use the state label in the corner | Jump straight to a presence state for review |
+| **Orb / Avatar** toggle in the header, or press **A** | Choose which presentation PEPO uses (remembered per browser). A ~350 ms switch: one leaves, the other arrives; nothing else changes |
 | Sun / moon button in the header, or press **T** | Dark or light theme (remembered per browser; follows the system until chosen) |
-| Move the pointer to the left edge | Reveal the navigation rail |
+| Move the pointer to the left edge | Reveal the navigation rail. **Conversations** opens the history; **Home** puts the work away; **Workspace** brings it back |
 
 When microphone access is granted, the Orb and the waveform react to your
 real voice. When it isn't, they use a synthetic speech envelope instead.
@@ -47,6 +50,7 @@ src/
 │  ├─ events.ts                 UI intents: voiceStart, voiceStop, textSubmit, toolOpen…
 │  ├─ workspace.ts              workspace store: open, update, focus, close tools and their content
 │  ├─ status.ts                 status store the runtime reports to (shown on demand)
+│  ├─ conversation.ts           conversation history (turns and tool events), opened on demand
 │  ├─ theme.ts                  dark / light theme: saved choice, else the system's
 │  └─ tokens.ts                 colours, durations, easing
 ├─ presence/
@@ -55,7 +59,8 @@ src/
 │  ├─ body/particleShaders.ts   the Orb's particles
 │  ├─ orb/                      state language, geometry, glass/stream/orbit/star shaders
 │  ├─ fathi/
-│  │  ├─ fathi-avatar.js        FATHI's original renderer and motion controller, unchanged
+│  │  ├─ fathi-avatar.js        FATHI's original renderer and rig (one added line: a controller can be passed in)
+│  │  ├─ humanMotion.ts         the Avatar's behaviour: natural human motion, driving FATHI's rig
 │  │  ├─ fathi-*.bin, *.json    FATHI's original geometry (cloud, depth, contour, strands)
 │  │  ├─ three.*.min.js         the Three.js build FATHI ships with (MIT, see THIRD_PARTY_NOTICES)
 │  │  ├─ FathiAvatar.tsx        mounts FATHI and passes it PEPO's state, voice level and pointer
@@ -67,7 +72,7 @@ src/
 │  ├─ layout.ts                 where PEPO and each surface go (desktop, tablet, phone sheet)
 │  ├─ FloatingWindow.tsx        surfaces that grow from PEPO's light and collapse back to it
 │  ├─ LightStreams.tsx          particles of light from PEPO to the surface it is working on
-│  └─ surfaces/                 Map (route drawing itself), Notes, Terminal, empty states
+│  └─ surfaces/                 Map (route drawing itself), Notes, Terminal, Conversation, empty states
 ├─ voice/                       VoiceSurface, Waveform, Transcript, PresenceCaption, mic energy
 ├─ chrome/                      GlobalHeader, PresenceToggle, ThemeToggle, StatusIndicator, NavigationRail, AdaptiveDock
 ├─ background/                  AmbientBackground (a lake at night, or at dawn in the light theme)
@@ -114,24 +119,30 @@ PEPO acts:
 - **Light streams:** fine particles travel from PEPO to a surface when it
   appears and for as long as PEPO is writing into it, marked by a small
   pulse in the surface's label.
-- **Surfaces:** a hairline border, a whisper of glass, a small label and a
-  quiet close button. The header is the drag handle, and there is no OS
-  chrome. A surface moved by hand stays put until the workspace rearranges,
-  then settles back into place.
-- **Putting it away:** closing every surface (or pressing Esc) returns PEPO
-  to the centre.
+- **Surfaces:** a restrained radius, a hairline border, light glass, a small
+  label, quiet minimise and close buttons, and a resize corner. No OS chrome.
+  The surface in front is fully clear; the others are very slightly quieter.
+  Timings: open ~0.3 s, close ~0.22 s, minimise ~0.3 s, focus ~0.18 s.
+- **Your arrangement stays:** a surface you move or resize keeps its place
+  (on screen) and its slot in PEPO's arrangement, so its neighbours don't
+  jump. Double-click its header to hand it back to PEPO.
+- **Putting it away:** minimise a surface, or press Esc to put them all away
+  in the dock; PEPO returns to the centre and nothing is lost. When a task
+  finishes, the surfaces stay where they are until you put them away.
 - **Phones:** PEPO rises to the top, and the newest tool opens as a bottom
   sheet with small tabs to switch between surfaces.
 
-The dock adapts too: any tool PEPO has open that isn't pinned joins the dock
-while it's open, open tools show a small dot, and **More** opens a shelf with
-every tool. Clicking a surface brings it to the front.
+The dock adapts too: pinned tools, then whatever is open or put away (a dot,
+hollow when put away), then up to two tools closed in the last ten minutes.
+**More** opens a shelf with every tool. Clicking a surface brings it to the
+front.
 
 The runtime drives it through `workspace`:
 
 ```ts
 const id = workspace.open('map', 'Norway · route', { progress: 0 })
 workspace.update(id, { active: true, data: { progress: 0.4 } })
+workspace.minimize(id)      // put away; workspace.focus(id) restores it
 workspace.close(id)
 pepoEvents.on('toolOpen', ({ toolId }) => /* user clicked a dock tool */)
 ```
@@ -163,33 +174,85 @@ transitions.
 - **speaking**: luminance waves travel from the core to the surface, driven by speech energy that fades out slowly
 - **working**: organised and active (in Scene 3 it will also stream particles toward tool windows)
 - **waiting**: calmer and dimmer than idle
+- **attentive**: the user is about to speak or type (the keyboard opened): a little nearer and brighter
+- **interrupted**: speech stopped mid-phrase: the light gathers in and quiets, then listening
+- **success**: ordered and bright for a moment after a task, then rest
+- **error**: dimmer and slower; never an alarm
 
 ### Orb ↔ Avatar
 
-The Avatar is FATHI, exactly as it came from the FATHI avatar export: its
-renderer, shaders, point cloud, depth, contour and strands, and its own
-motion controller (`src/presence/fathi/fathi-avatar.js`, unchanged; see
-`USAGE.txt` next to it). PEPO doesn't draw or animate FATHI itself. It
-mounts FATHI on its own canvas over the Orb and tells it three things:
-- **State:** idle and waiting → `idle`; listening → `listening`;
-  understanding and thinking → `thinking`; working → `tool-active`;
-  speaking → `speaking`.
-- **Voice level:** sent every 50 ms while speaking or listening. FATHI's
-  controller keeps the microphone from lighting the speech mask.
-- **Pointer:** where it is while it's over FATHI.
+The Orb and the Avatar are two separate presentations of the same PEPO,
+chosen with the header switch. They never morph into each other. Switching
+takes about 350 ms: the current one fades out, then the other fades in. The
+presence state, voice, conversation, tools and workspace carry on untouched.
+FATHI is loaded in the background a moment after start and kept alive
+(paused while hidden), so switching is instant. If FATHI can't start here
+(no WebGL2, or an insecure context without Web Crypto), PEPO stays with the
+Orb.
 
-FATHI is created the first time the Avatar is chosen and then kept alive,
-paused while hidden. Switching is a calm 1.1 s cross-fade: the Orb fades
-away as FATHI fades in. The Orb's canvas pauses while FATHI is shown. If
-FATHI can't start (no WebGL2, or an insecure context without Web Crypto),
-PEPO stays with the Orb.
+**Appearance:** the Avatar is FATHI as exported: its renderer, shaders,
+point cloud, depth, contour, strands and per-state lighting
+(`src/presence/fathi/fathi-avatar.js`; see `USAGE.txt`). The only change to
+that file is one line that lets a motion controller be passed in. Without
+it, FATHI uses its own controller. The geometry files are embedded in the
+bundle and served to FATHI's own requests (`embeddedAssets.ts`), so the
+renderer runs unchanged even from a single-file build.
 
-The form is the viewer's choice (`PresenceToggle`, or
-`presence.update({ form: 'avatar' | 'orb' })`). It never changes on its own.
+**Behaviour:** `humanMotion.ts` drives FATHI's rig. PEPO tells FATHI:
+- **State:** all eleven presence states. FATHI's own lighting gets the
+  nearest of its states.
+- **Voice level:** every 50 ms while speaking or listening. Only speech
+  output moves the jaw.
+- **Pointer:** while it's over FATHI.
+- **Semantic cues:** from the runtime, `pepoEvents.emit('cue', { kind })`
+  with `question`, `emphasis`, `agree`, `strongAgree`, `nod`, `consider`,
+  `conclude`, `lookLeft` or `lookRight`. The demo tilts on its questions.
 
-The geometry files are embedded in the bundle and served to FATHI's own
-requests for them (`embeddedAssets.ts`), so the renderer runs unchanged even
-from a single-file build.
+#### Natural human motion
+
+`humanMotion.ts` aims for a calm person sitting in front of a webcam: about
+80% stillness and 20% meaningful movement.
+- **Independent clocks:** breath, blinks, gaze, head and posture, brows and
+  shoulders each run on their own irregular clock and are never
+  synchronised.
+- **No loops:** behaviour is chosen by weighted probabilities, so no sequence
+  repeats.
+- **Springs:** movement accelerates, overshoots a hair and settles.
+- **Breath:** every cycle is 3.5–6 s with its own depth, plus an occasional
+  deeper breath and a quick inhale before speaking.
+- **Blinks:** irregular, usually 2–8 s apart, with occasional long gaps.
+  Mostly 100–220 ms, sometimes a relaxed 220–350 ms, rarely partial or
+  double. They come before speech or after a thought, and less often while
+  listening.
+- **Gaze:** near the camera about 80% of the time, with micro-saccades and
+  brief glances. The eyes move first and the head follows 1–2° about
+  0.1–0.25 s later. Gaze follows the pointer only while it moves.
+- **Head:** usually still, with irregular corrections of 0.3–3° and a rare
+  conversational turn while speaking.
+- **Attentive:** the eyes settle on you and movement quiets.
+- **Listening:** the eyes settle on you, the head stills and leans in. Silent
+  acknowledgements stay sparse: a micro nod, an agreement nod, at most a
+  double nod, or a small tilt.
+- **Thinking:** stillness, then the eyes drift up and aside, a slow blink,
+  and maybe a small tilt or brow asymmetry.
+- **Working:** the eyes go to the work beside PEPO and come back to you now
+  and then.
+- **Pre-speech:** an inhale, a posture adjustment, the eyes return, maybe a
+  blink. The demo waits about half a second before the voice starts.
+- **Speaking:** the jaw follows the speech envelope. Everything larger
+  follows phrases (detected from pauses in the audio) and semantic cues:
+  - A phrase starts with a forward emphasis, a micro nod or a brow lift.
+  - A phrase ends with a blink, a settling nod, a glance or stillness.
+  - A question gets a slight tilt.
+  - The head never follows the loudness of the voice.
+- **Interrupted:** the jaw releases within about 150 ms, the eyes find you,
+  there is a small head adjustment, and then the listening posture.
+- **Success:** a settling nod. **Error:** a slow blink, a brief look down,
+  a small tilt.
+
+FATHI's own drawing has no movable irises (its shader declares a gaze
+uniform but doesn't use it), so gaze shows only through the head following
+the eyes.
 
 ### Themes
 
@@ -201,7 +264,9 @@ FATHI are inverted with the hue turned back round: light-on-dark becomes
 ink-on-paper with the same colour families (deep cyan line work, a burnt
 orange mask, a pale glass Orb). What was white would turn black, so a
 "lighten" layer lifts the darkest ink to deep navy. The choice is saved per browser. Until the
-viewer picks a theme, it follows the system.
+viewer picks a theme, it follows the system. Switching cross-fades colours
+and the background in about 300 ms; PEPO dims for a moment while its
+rendering flips. There is no flash and nothing resets.
 
 ### Credits
 

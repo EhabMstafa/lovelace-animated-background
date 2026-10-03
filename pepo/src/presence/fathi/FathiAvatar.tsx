@@ -1,24 +1,48 @@
 import { useEffect, useRef, useState } from 'react'
+import { pepoEvents } from '../../core/events'
 import { presence, type PresenceState } from '../../core/presence'
 import { workspace } from '../../core/workspace'
 import { serveFathiAssets } from './embeddedAssets'
 import type { FathiAvatar as FathiInstance, FathiState } from './fathi-avatar'
+import { createHumanMotion } from './humanMotion'
 
-/** PEPO's presence states, in FATHI's own vocabulary. */
-const FATHI_STATE: Record<PresenceState, FathiState> = {
+/** PEPO's states in FATHI's vocabulary, for FATHI's own per-state lighting. */
+const FATHI_LIGHT: Record<PresenceState, FathiState> = {
   idle: 'idle',
-  waiting: 'idle',
+  attentive: 'listening',
   listening: 'listening',
   understanding: 'thinking',
   thinking: 'thinking',
-  working: 'tool-active',
   speaking: 'speaking',
+  interrupted: 'listening',
+  working: 'tool-active',
+  waiting: 'idle',
+  success: 'idle',
+  error: 'error',
 }
 
-const FADE_MS = 1100
+/** The Avatar's body language groups PEPO's states a little differently. */
+const BEHAVIOUR: Record<PresenceState, Parameters<ReturnType<typeof createHumanMotion>['setPresence']>[0]> = {
+  idle: 'idle',
+  attentive: 'attentive',
+  listening: 'listening',
+  understanding: 'thinking',
+  thinking: 'thinking',
+  speaking: 'speaking',
+  interrupted: 'interrupted',
+  working: 'working',
+  waiting: 'waiting',
+  success: 'success',
+  error: 'error',
+}
+
+/** Switching forms is a presentation change only: a short, soft cross-fade. */
+export const SWITCH_MS = 350
 
 interface FathiAvatarProps {
   visible: boolean
+  /** Load FATHI ahead of time (while the Orb is shown) so the first switch is instant. */
+  preload: boolean
   state: PresenceState
   reducedMotion: boolean
   /** Called once FATHI is drawn (true), or if it can't run here (false). */
@@ -26,22 +50,25 @@ interface FathiAvatarProps {
 }
 
 /**
- * The Avatar: FATHI's original renderer, drawing, depth and motion
- * controller, used exactly as exported (see ./USAGE.txt). PEPO only tells it
- * the state, the voice level and where the pointer is. It is created the
- * first time the Avatar is chosen and then kept alive, paused while hidden.
+ * The Avatar: FATHI's original renderer, drawing and rig, used as exported
+ * (see ./USAGE.txt). Its behaviour comes from PEPO's natural motion
+ * controller (./humanMotion.ts), passed in through FATHI's `controller`
+ * option. PEPO tells it the presence state, the voice level, the pointer and
+ * semantic cues. It is kept alive once created and paused while hidden, so
+ * switching never interrupts anything: only the presentation changes.
  */
-export function FathiAvatar({ visible, state, reducedMotion, onReady }: FathiAvatarProps) {
+export function FathiAvatar({ visible, preload, state, reducedMotion, onReady }: FathiAvatarProps) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const avatar = useRef<FathiInstance | null>(null)
-  const [wanted, setWanted] = useState(visible)
+  const controller = useRef(createHumanMotion())
+  const [wanted, setWanted] = useState(visible || preload)
   const [ready, setReady] = useState(false)
   const readyCb = useRef(onReady)
   readyCb.current = onReady
 
   useEffect(() => {
-    if (visible) setWanted(true)
-  }, [visible])
+    if (visible || preload) setWanted(true)
+  }, [visible, preload])
 
   // Create once, on first use.
   useEffect(() => {
@@ -49,10 +76,11 @@ export function FathiAvatar({ visible, state, reducedMotion, onReady }: FathiAva
     let cancelled = false
     serveFathiAssets()
     import('./fathi-avatar.js')
-      .then(({ createFathiAvatar }) => createFathiAvatar(canvas.current!, { motion: true }))
+      .then(({ createFathiAvatar }) => createFathiAvatar(canvas.current!, { motion: true, controller: controller.current }))
       .then((instance) => {
         if (cancelled) return instance.dispose()
         avatar.current = instance
+        instance.stop()
         setReady(true)
         readyCb.current(true)
       })
@@ -77,20 +105,20 @@ export function FathiAvatar({ visible, state, reducedMotion, onReady }: FathiAva
       a.start()
       return
     }
-    const id = window.setTimeout(() => a.stop(), FADE_MS)
+    const id = window.setTimeout(() => a.stop(), SWITCH_MS)
     return () => window.clearTimeout(id)
   }, [visible, ready, reducedMotion])
 
-  // State, and the voice level while listening or speaking (the controller
-  // keeps the microphone from lighting the speech mask).
+  // State (kept current even while hidden, so a switch shows the right
+  // behaviour at once), and the voice level while listening or speaking. The
+  // controller only lets speech output move the jaw.
   useEffect(() => {
     const a = avatar.current
     if (!a || !ready) return
-    a.setState(FATHI_STATE[state])
+    a.setState(FATHI_LIGHT[state])
+    controller.current.setPresence(BEHAVIOUR[state])
     if (!visible || (state !== 'speaking' && state !== 'listening')) {
       a.setAmplitude(0)
-      a.setSpectrum([])
-      a.setFormants(null, null)
       return
     }
     const id = window.setInterval(() => a.setAmplitude(presence.getEnergy()), 50)
@@ -100,7 +128,17 @@ export function FathiAvatar({ visible, state, reducedMotion, onReady }: FathiAva
     }
   }, [state, visible, ready])
 
-  // FATHI looks toward the pointer while it is over him.
+  // Meaning from the runtime: restrained gestures, never on every sentence.
+  useEffect(() => {
+    const off = pepoEvents.on('cue', ({ kind }) => {
+      if (visible) avatar.current?.gesture(kind)
+    })
+    return () => {
+      off()
+    }
+  }, [visible])
+
+  // FATHI notices the pointer while it is over him.
   useEffect(() => {
     if (!ready || !visible || reducedMotion) return
     const onMove = (e: PointerEvent) => {
@@ -120,7 +158,7 @@ export function FathiAvatar({ visible, state, reducedMotion, onReady }: FathiAva
     }
   }, [ready, visible, reducedMotion])
 
-  // Keep the drawing sharp as the stage resizes or scales (PEPO stepping aside).
+  // Keep the drawing sharp as the stage resizes (PEPO stepping aside).
   useEffect(() => {
     if (!ready || !canvas.current) return
     const resize = () => avatar.current?.resize()
@@ -129,7 +167,7 @@ export function FathiAvatar({ visible, state, reducedMotion, onReady }: FathiAva
     let settle = 0
     const afterMove = () => {
       window.clearTimeout(settle)
-      settle = window.setTimeout(resize, FADE_MS + 100)
+      settle = window.setTimeout(resize, 1200)
     }
     const offWorkspace = workspace.subscribe(afterMove)
     window.addEventListener('resize', afterMove)

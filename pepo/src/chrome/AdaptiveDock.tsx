@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CodeXml, Folder, Globe, Image, LayoutGrid, Map as MapIcon, NotebookPen, SquareTerminal, type LucideIcon } from 'lucide-react'
+import { CodeXml, Folder, Globe, Image, LayoutGrid, Map as MapIcon, MessagesSquare, NotebookPen, SquareTerminal, type LucideIcon } from 'lucide-react'
 import { pepoEvents } from '../core/events'
 import { useWorkspace, workspace } from '../core/workspace'
 import { ease } from '../core/tokens'
@@ -19,7 +19,12 @@ export const TOOLS: Record<string, DockTool> = {
   map: { id: 'map', label: 'Maps', icon: MapIcon },
   code: { id: 'code', label: 'Code', icon: CodeXml },
   images: { id: 'images', label: 'Images', icon: Image },
+  conversation: { id: 'conversation', label: 'Conversation', icon: MessagesSquare },
 }
+
+/** Tools closed recently stay within reach for a while. */
+const RECENT_MS = 10 * 60_000
+const RECENT_MAX = 2
 
 function Tip({ show, label }: { show: boolean; label: string }) {
   return (
@@ -48,7 +53,7 @@ interface AdaptiveDockProps {
   relevant?: string[]
 }
 
-/** Opens a tool, or brings it forward if it is already on the workspace. */
+/** Opens a tool, or brings it forward (restoring it if it was put away). */
 function openTool(id: string) {
   pepoEvents.emit('toolOpen', { toolId: id })
   const open = workspace.getSnapshot().find((w) => w.kind === id)
@@ -65,8 +70,19 @@ export function AdaptiveDock({ pinned = ['browser', 'files', 'terminal', 'notes'
   const [shelf, setShelf] = useState(false)
   const windows = useWorkspace()
   const openKinds = new Set(windows.map((w) => w.kind as string))
-  // Whatever PEPO has open that isn't pinned joins the shelf for as long as it's open.
-  const relevant = [...new Set([...suggested, ...windows.map((w) => w.kind as string)])].filter((id) => !pinned.includes(id) && TOOLS[id])
+  const awayKinds = new Set(windows.filter((w) => w.minimized).map((w) => w.kind as string))
+  // Recently closed tools: kept within reach for a while.
+  const [recent, setRecent] = useState<{ id: string; at: number }[]>([])
+  useEffect(
+    () =>
+      pepoEvents.on('toolClose', ({ toolId }) =>
+        setRecent((list) => [{ id: toolId, at: Date.now() }, ...list.filter((r) => r.id !== toolId)].slice(0, 6)),
+      ),
+    [],
+  )
+  const recentIds = recent.filter((r) => Date.now() - r.at < RECENT_MS && !openKinds.has(r.id)).map((r) => r.id).slice(0, RECENT_MAX)
+  // Pinned tools, then whatever is open (or put away), then what was used recently.
+  const relevant = [...new Set([...suggested, ...windows.map((w) => w.kind as string), ...recentIds])].filter((id) => !pinned.includes(id) && TOOLS[id])
 
   useEffect(() => {
     if (!shelf) return
@@ -102,7 +118,7 @@ export function AdaptiveDock({ pinned = ['browser', 'files', 'terminal', 'notes'
       <motion.button
         key={id}
         layout
-        className={`dock-item ${openKinds.has(id) ? 'is-open' : ''}`}
+        className={`dock-item ${openKinds.has(id) ? 'is-open' : ''} ${awayKinds.has(id) ? 'is-away' : ''}`}
         aria-label={tool.label}
         onPointerEnter={() => setHovered(id)}
         onPointerLeave={() => setHovered((h) => (h === id ? null : h))}
@@ -117,8 +133,8 @@ export function AdaptiveDock({ pinned = ['browser', 'files', 'terminal', 'notes'
         <span className="dock-icon">
           <Icon size={19} strokeWidth={1.35} />
         </span>
-        <Tip show={hovered === id} label={tool.label} />
-        {(transient || openKinds.has(id)) && <span className="dock-relevance" aria-hidden="true" />}
+        <Tip show={hovered === id} label={awayKinds.has(id) ? `${tool.label} · put away` : tool.label} />
+        {openKinds.has(id) && <span className="dock-relevance" aria-hidden="true" />}
       </motion.button>
     )
   }

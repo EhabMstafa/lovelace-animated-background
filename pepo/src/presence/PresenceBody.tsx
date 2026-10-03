@@ -46,8 +46,8 @@ const ORBITS: OrbitSpec[] = [
 const RADIUS = 1
 const GLOW_SIZE = 4.6
 const TILT = new THREE.Euler(0.18, 0, -0.12)
-/** Switching to the Avatar fades the Orb away while FATHI fades in over it. */
-const SWITCH_SECONDS = 1.1
+/** Switching to the Avatar fades the Orb away while FATHI fades in over it (a presentation change only). */
+const SWITCH_SECONDS = 0.35
 
 export const CAMERA_Z = 8.2
 
@@ -263,7 +263,9 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     const step = dt / (reducedMotion ? SWITCH_SECONDS * 0.6 : SWITCH_SECONDS)
     c.morph = morphTarget > c.morph ? Math.min(1, c.morph + step) : Math.max(0, c.morph - step)
     const m = c.morph
-    const orbVisible = 1 - THREE.MathUtils.smoothstep(m, 0, 0.6)
+    // One presentation leaves, then the other arrives: the Orb is gone within
+    // the first ~0.2 s, while FATHI fades in over the last ~0.2 s.
+    const orbVisible = 1 - THREE.MathUtils.smoothstep(m, 0, 0.55)
     fade.value = orbVisible
     for (const obj of orbOnly.current) if (obj) obj.visible = orbVisible > 0.001
     bodyMat.uniforms.uOpacity.value = orbVisible
@@ -284,7 +286,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
 
     if (spinGroup.current) {
       spinGroup.current.rotation.y = c.rot
-        spinGroup.current.scale.setScalar(p.scale * (1 + m * 0.25))
+        spinGroup.current.scale.setScalar(p.scale * (1 + m * 0.06))
     }
 
     streamMat.uniforms.uTime.value = c.t
@@ -327,8 +329,8 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
         qFree.setFromEuler(euler.set(o.free[0], o.free[1] + precess, o.free[2]))
         qAligned.setFromEuler(euler.set(o.aligned[0], o.aligned[1] + precess * 0.3, o.aligned[2]))
         group.quaternion.slerpQuaternions(qFree, qAligned, p.organize * 0.8)
-        // Orbits widen and fade as the Orb gives way to the Avatar.
-        group.scale.setScalar(p.scale * (1 - p.converge * 0.5) * (1 + m * 0.35))
+        // Orbits widen a touch and fade as the Orb gives way to the Avatar.
+        group.scale.setScalar(p.scale * (1 - p.converge * 0.5) * (1 + m * 0.06))
       }
     })
 

@@ -3,6 +3,11 @@ import type { LucideIcon } from 'lucide-react'
 
 /** Itinerary notes, written line by line as PEPO plans. */
 export function NotesSurface({ title, lines = [], writing }: { title?: string; lines?: string[]; writing: boolean }) {
+  const end = useRef<HTMLDivElement>(null)
+  // Follow the newest line while PEPO is writing.
+  useEffect(() => {
+    if (writing) end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' })
+  }, [lines.length, writing])
   return (
     <div className="notes-surface">
       {title && <h3>{title}</h3>}
@@ -24,6 +29,7 @@ export function NotesSurface({ title, lines = [], writing }: { title?: string; l
           )
         })}
       </ul>
+      <div ref={end} />
     </div>
   )
 }

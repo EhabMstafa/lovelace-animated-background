@@ -1,26 +1,35 @@
 import { useSyncExternalStore } from 'react'
 
 /**
- * The seven states of PEPO's presence. The visual layer only *renders*
- * these; deciding which one is active belongs to PEPO's runtime.
+ * PEPO's presence states. The visual layer only *renders* these; deciding
+ * which one is active belongs to PEPO's runtime. The Orb and the Avatar read
+ * the same state and each express it in their own way.
  */
 export type PresenceState =
   | 'idle'
+  | 'attentive'
   | 'listening'
   | 'understanding'
   | 'thinking'
   | 'speaking'
+  | 'interrupted'
   | 'working'
   | 'waiting'
+  | 'success'
+  | 'error'
 
 export const PRESENCE_STATES: readonly PresenceState[] = [
   'idle',
+  'attentive',
   'listening',
   'understanding',
   'thinking',
   'speaking',
+  'interrupted',
   'working',
   'waiting',
+  'success',
+  'error',
 ]
 
 /** Which body PEPO wears: the ambient Orb or the point-cloud Avatar. */

@@ -27,15 +27,22 @@ export function PresenceLayer({ compact = false }: { compact?: boolean }) {
     [compact],
   )
 
-  // The Orb fades out only once FATHI is ready to take its place.
+  // The Orb fades out only once FATHI is ready to take its place. FATHI is
+  // loaded in the background shortly after start, so switching is instant.
   const [fathiReady, setFathiReady] = useState(false)
   const avatar = form === 'avatar' && fathiReady
+  const [preload, setPreload] = useState(false)
+  useEffect(() => {
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback
+    const id = window.setTimeout(() => (idle ? idle(() => setPreload(true), { timeout: 2000 }) : setPreload(true)), 2500)
+    return () => window.clearTimeout(id)
+  }, [])
 
   // Full frame rate while the Orb fades out or back in.
   const [transforming, setTransforming] = useState(false)
   useEffect(() => {
     setTransforming(true)
-    const id = window.setTimeout(() => setTransforming(false), 2200)
+    const id = window.setTimeout(() => setTransforming(false), 900)
     return () => window.clearTimeout(id)
   }, [avatar])
 
@@ -84,7 +91,7 @@ export function PresenceLayer({ compact = false }: { compact?: boolean }) {
         scaled stage and is resized for real rather than scaled. */}
     <div className="fathi-stage" aria-hidden="true">
       <ErrorBoundary label="avatar" onError={() => setFathiReady(false)}>
-        <FathiAvatar visible={form === 'avatar'} state={state} reducedMotion={reducedMotion} onReady={setFathiReady} />
+        <FathiAvatar visible={form === 'avatar'} preload={preload} state={state} reducedMotion={reducedMotion} onReady={setFathiReady} />
       </ErrorBoundary>
     </div>
     <div className="presence-ink" aria-hidden="true" />

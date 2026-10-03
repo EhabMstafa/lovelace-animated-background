@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { pepoEvents } from '../core/events'
+import { conversation } from '../core/conversation'
+import { pepoEvents, type PEPOEventMap } from '../core/events'
 import { presence, type PresenceState } from '../core/presence'
 import { systemStatus } from '../core/status'
 import { workspace, type ToolKind } from '../core/workspace'
@@ -37,8 +38,12 @@ const TERMINAL = [
 ]
 
 const TITLES: Record<ToolKind, string> = {
-  map: 'Map', notes: 'Notes', terminal: 'Terminal', browser: 'Browser', files: 'Files', code: 'Code', images: 'Images',
+  map: 'Map', notes: 'Notes', terminal: 'Terminal', browser: 'Browser', files: 'Files', code: 'Code', images: 'Images', conversation: 'Conversation',
 }
+
+type Cue = { at: number; kind: PEPOEventMap['cue']['kind'] }
+/** Both replies are a statement, then a question: the question gets a slight tilt. */
+const REPLY_CUES: Cue[] = [{ at: 2.4, kind: 'question' }]
 
 export function DemoConductor() {
   useEffect(() => {
@@ -62,9 +67,20 @@ export function DemoConductor() {
       if (from !== state) pepoEvents.emit('presenceChange', { from, to: state })
     }
 
-    /** Speech energy for PEPO's own voice: phrases made of syllables. */
-    const speak = (ms: number, done: () => void) => {
+    /** PEPO says a line: it is captioned, kept in the conversation, then voiced. */
+    const say = (line: string) => {
+      presence.update({ caption: line })
+      conversation.add('pepo', line)
+    }
+
+    /**
+     * Speech energy for PEPO's own voice: phrases made of syllables. Semantic
+     * cues (a question, an emphasis) are sent at the phrase they belong to;
+     * the Avatar's head follows those, never the loudness.
+     */
+    const speak = (ms: number, done: () => void, cues: Cue[] = []) => {
       const start = performance.now()
+      cues.forEach((c) => later(c.at * 1000, () => pepoEvents.emit('cue', { kind: c.kind })))
       const tick = (now: number) => {
         const t = (now - start) / 1000
         if (now - start > ms) {
@@ -95,6 +111,7 @@ export function DemoConductor() {
         set('thinking')
         later(1400, () => {
           set('working', { caption: 'Working on it.' })
+          conversation.add('tool', 'Opened Map, Notes and Terminal for the Norway route')
           // A tool the viewer already opened is reused: give it this task's title and content.
           const map = workspace.open('map', 'Norway · route', { progress: 0 })
           workspace.update(map, { title: 'Norway · route', active: true, data: { progress: 0 } })
@@ -134,16 +151,20 @@ export function DemoConductor() {
           })
 
           later(6900, () => {
-            set('speaking', { caption: TASK_REPLY })
+            // A breath before the voice: the body prepares, then audio begins.
+            set('speaking')
+            say(TASK_REPLY)
             later(520, () =>
-              speak(4200, () => {
-                set('idle')
-                later(2600, () => {
-                  const w = workspace.find('terminal')
-                  if (w) workspace.close(w.id)
-                })
-                later(4200, () => presence.update({ caption: null }))
-              }),
+              speak(
+                4200,
+                () => {
+                  // Done. The work stays where it is: the user decides when to put it away.
+                  set('success')
+                  later(1400, () => set('idle'))
+                  later(4200, () => presence.update({ caption: null }))
+                },
+                REPLY_CUES,
+              ),
             )
           })
         })
@@ -156,19 +177,23 @@ export function DemoConductor() {
         set('thinking')
         later(2200, () => {
           // A breath before the voice: the body prepares, then audio begins.
-          set('speaking', { caption: SAMPLE_REPLY })
+          set('speaking')
+          say(SAMPLE_REPLY)
           later(520, () =>
-            speak(4200, () => {
-              set('idle')
-              later(4200, () => presence.update({ caption: null }))
-            }),
+            speak(
+              4200,
+              () => {
+                set('idle')
+                later(4200, () => presence.update({ caption: null }))
+              },
+              REPLY_CUES,
+            ),
           )
         })
       })
     }
 
-    const offStart = pepoEvents.on('voiceStart', () => {
-      clear()
+    const listen = () => {
       set('listening', { caption: null, transcript: null })
       // Simulated live transcription, word by word.
       const words = SAMPLE_UTTERANCE.split(' ')
@@ -178,11 +203,30 @@ export function DemoConductor() {
       later(700 + words.length * 260 + 900, () => {
         if (presence.getSnapshot().state === 'listening') pepoEvents.emit('voiceStop')
       })
+    }
+
+    const offStart = pepoEvents.on('voiceStart', () => {
+      const wasSpeaking = presence.getSnapshot().state === 'speaking'
+      clear()
+      presence.setEnergy(0)
+      if (wasSpeaking) {
+        // Interrupted: speech stops at once, PEPO turns its attention to the user.
+        set('interrupted', { caption: null })
+        later(280, listen)
+      } else listen()
+    })
+
+    // Opening the keyboard: PEPO becomes attentive (only from rest).
+    const offFocus = pepoEvents.on('inputFocus', ({ active }) => {
+      const s = presence.getSnapshot().state
+      if (active && s === 'idle') set('attentive')
+      else if (!active && s === 'attentive') set('idle')
     })
 
     const offStop = pepoEvents.on('voiceStop', () => {
       clear()
       const said = presence.getSnapshot().transcript
+      if (said) conversation.add('user', said.replace(/…$/, ''))
       if (said) later(500, TASK_PATTERN.test(said) ? runTask : respond)
       else set('idle', { transcript: null })
     })
@@ -190,6 +234,7 @@ export function DemoConductor() {
     const offText = pepoEvents.on('textSubmit', ({ text }) => {
       clear()
       presence.update({ caption: null, transcript: text })
+      conversation.add('user', text)
       later(900, TASK_PATTERN.test(text) ? runTask : respond)
     })
 
@@ -207,6 +252,7 @@ export function DemoConductor() {
         clear()
         workspace.closeAll()
         presence.update({ transcript: SAMPLE_UTTERANCE, caption: null })
+        conversation.add('user', SAMPLE_UTTERANCE)
         later(600, runTask)
       }
     }
@@ -233,6 +279,7 @@ export function DemoConductor() {
       offStart()
       offStop()
       offText()
+      offFocus()
       offTool()
       offStatus()
       window.removeEventListener('keydown', onKey)

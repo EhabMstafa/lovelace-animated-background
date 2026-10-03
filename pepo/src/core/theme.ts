@@ -18,8 +18,16 @@ function stored(): Theme | null {
 /** The viewer's choice, else their system's. */
 let current: Theme = stored() ?? (systemQuery?.matches ? 'light' : 'dark')
 
-function apply() {
+let switching = 0
+
+function apply(animate = false) {
   const root = document.documentElement
+  // A ~300 ms cross-fade of colours: no flash, no full-screen fade, nothing else resets.
+  if (animate) {
+    root.classList.add('theme-switching')
+    window.clearTimeout(switching)
+    switching = window.setTimeout(() => root.classList.remove('theme-switching'), 380)
+  }
   root.dataset.theme = current
   root.style.colorScheme = current
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', current === 'light' ? '#eef3f9' : '#030812')
@@ -31,7 +39,7 @@ if (typeof document !== 'undefined') apply()
 systemQuery?.addEventListener('change', (e) => {
   if (stored()) return
   current = e.matches ? 'light' : 'dark'
-  apply()
+  apply(true)
   listeners.forEach((l) => l())
 })
 
@@ -45,7 +53,7 @@ export const theme = {
     } catch {
       // Storage unavailable: the choice lasts this visit only.
     }
-    apply()
+    apply(true)
     listeners.forEach((l) => l())
   },
   toggle() {
