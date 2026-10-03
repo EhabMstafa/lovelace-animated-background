@@ -106,9 +106,10 @@ export const bodyVertex = /* glsl */ `
     float lip = lipTrace(bind) * warm;
     float speechGlow = (1.0 + uJaw * .06 * warm) * mix(uPresence.x, uPresence.y, warm);
     alpha = aFaceW * (0.55 + 0.45 * fathiDepth(bind.z)) * 0.98 * uFaceGain * smoothstep(-1.96, -1.74, bind.y)
-          * finish.x * speechGlow * (1.0 + lip * (.65 + uJaw * .22));
+          * finish.x * speechGlow * (1.0 + lip * (.65 + uJaw * .22)) * bodyShade(bind, normalMatrix);
     color = avatarColor(finish.y, warm, lip, .42 + uJaw * .08);
-    size = 0.62 + 0.0 * aSeed.y;
+    // Points the volume brought forward would grow with perspective; keep FATHI's point size.
+    size = 0.62 * gNear;
   }
 
   void main() {

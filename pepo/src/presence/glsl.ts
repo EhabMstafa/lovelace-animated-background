@@ -45,6 +45,34 @@ export const fathiRig = /* glsl */ `
   uniform float uLean;     // forward lean of head and chest
   uniform float uFaceScale;
   uniform vec3 uFaceOffset;
+  uniform float uVolume;   // 0 = FATHI's shallow relief, 1 = a rounded head, neck and chest
+
+  // FATHI is drawn as a shallow relief (depth ≈ a tenth of its width), so it
+  // reads flat. Volume lays the same points onto a simple body: the head is
+  // an egg whose width follows FATHI's own silhouette, the neck a cylinder,
+  // the chest a shallow barrel with shoulders falling back. The original
+  // relief rides on top as detail.
+  float headWidth(float y) { float h = (y - .06) / .96; return .66 * sqrt(max(0.0, 1.0 - h * h)); }
+  float bodyHeight(vec2 q) {
+    float w = max(headWidth(q.y), 1e-3);
+    float u = abs(q.x) / w;
+    float crown = sqrt(max(0.0, 1.0 - pow(max(0.0, q.y - .06) / .96, 2.0)));
+    float centre = .62 * crown - .16 * smoothstep(-.45, -.9, q.y);
+    float head = centre * sqrt(max(0.0, 1.0 - u * u)) - .14 * clamp((u - 1.0) * 3.0, 0.0, 1.0);
+    float neck = .30 * sqrt(max(0.0, 1.0 - pow(q.x / .46, 2.0)));
+    float chest = .34 * sqrt(max(0.0, 1.0 - pow(q.x / 1.8, 2.0))) - .24 * smoothstep(.5, 1.5, abs(q.x));
+    float h = mix(chest, neck, smoothstep(-1.42, -1.10, q.y));
+    return mix(h, head, smoothstep(-.98, -.70, q.y));
+  }
+  /** Surface normal of the body at a FATHI point (before any pose). */
+  vec3 bodyNormal(vec2 q) {
+    const float e = .025;
+    float dx = bodyHeight(q + vec2(e, 0.0)) - bodyHeight(q - vec2(e, 0.0));
+    float dy = bodyHeight(q + vec2(0.0, e)) - bodyHeight(q - vec2(0.0, e));
+    return normalize(vec3(-dx, -dy, 2.0 * e));
+  }
+  /** Set by rigPosition: how much the volume moved a point toward the camera (size compensation). */
+  float gNear = 1.0;
 
   float lipTrace(vec3 p) {
     float ax = abs(p.x), t = clamp(ax / .32, 0.0, 1.0);
@@ -92,6 +120,13 @@ export const fathiRig = /* glsl */ `
     float iris = exp(-pow(length(vec2(abs(bind.x) - .305, bind.y + .015)) / .05, 2.0)) * (1.0 - warm) * eyeX;
     p.x += uGaze.x * .016 * iris;
     p.y += uGaze.y * .009 * iris + uGaze.y * .005 * upperLid;
+    // Volume, with perspective compensated so the front view keeps FATHI's exact drawing.
+    float lift = uVolume * (bodyHeight(bind.xy) - .17);
+    float cam = 8.2 / uFaceScale;
+    gNear = (cam - bind.z) / (cam - bind.z - lift);
+    p.z += lift;
+    p.x *= gNear;
+    p.y = uFaceOffset.y + (p.y - uFaceOffset.y) * gNear;
     float head = smoothstep(-1.35, -.48, bind.y);
     float torso = 1.0 - smoothstep(-1.30, -.78, p.y);
     float shoulder = torso * smoothstep(.34, .78, abs(p.x));
@@ -110,6 +145,25 @@ export const fathiRig = /* glsl */ `
     posed.z += uLean * (head + 0.35 * torso);
     posed.y -= uLean * 0.2 * head;
     return posed;
+  }
+
+  /** Turns a bind-space direction with the head, as rigPosition turns points. */
+  vec3 poseDirection(vec3 n, vec3 bind) {
+    vec3 q = n;
+    float cy = cos(uHead.x), sy = sin(uHead.x); q = vec3(cy * q.x + sy * q.z, q.y, -sy * q.x + cy * q.z);
+    float cp = cos(uHead.y), sp = sin(uHead.y); q = vec3(q.x, cp * q.y - sp * q.z, sp * q.y + cp * q.z);
+    float cr = cos(uHead.z), sr = sin(uHead.z); q = vec3(cr * q.x - sr * q.y, sr * q.x + cr * q.y, q.z);
+    return normalize(mix(n, q, smoothstep(-1.35, -.48, bind.y)));
+  }
+
+  // Soft key light from above-left and in front, in view space.
+  const vec3 KEY_LIGHT = vec3(-0.38, 0.30, 0.87);
+  /** Form shading: lit planes a little brighter, turning planes a little dimmer. */
+  float bodyShade(vec3 bind, mat3 nm) {
+    vec3 n = normalize(nm * poseDirection(bodyNormal(bind.xy), bind));
+    float key = max(dot(n, normalize(KEY_LIGHT)), 0.0);
+    float turn = 1.0 - max(n.z, 0.0);
+    return mix(1.0, .66 + .48 * key + .20 * turn * turn, uVolume);
   }
 
   float softPatch(vec3 p, float cx, float cy, float sx, float sy) {

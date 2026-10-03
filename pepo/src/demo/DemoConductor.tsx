@@ -95,8 +95,9 @@ export function DemoConductor() {
         set('thinking')
         later(1400, () => {
           set('working', { caption: 'Working on it.' })
+          // A tool the viewer already opened is reused: give it this task's title and content.
           const map = workspace.open('map', 'Norway · route', { progress: 0 })
-          workspace.update(map, { active: true })
+          workspace.update(map, { title: 'Norway · route', active: true, data: { progress: 0 } })
           const t0 = performance.now()
           const draw = () => {
             const k = Math.min(1, (performance.now() - t0) / 5600)
@@ -108,7 +109,7 @@ export function DemoConductor() {
 
           later(900, () => {
             const notes = workspace.open('notes', 'Itinerary', { heading: 'Norway · 7 days', lines: [] })
-            workspace.update(notes, { active: true })
+            workspace.update(notes, { title: 'Itinerary', active: true, data: { heading: 'Norway · 7 days', lines: [] } })
             ITINERARY.forEach((line, i) =>
               later(500 + i * 620, () => {
                 const w = workspace.find('notes')
@@ -121,7 +122,7 @@ export function DemoConductor() {
 
           later(1700, () => {
             const term = workspace.open('terminal', 'Terminal', { lines: [] })
-            workspace.update(term, { active: true })
+            workspace.update(term, { active: true, data: { lines: [] } })
             TERMINAL.forEach((line, i) =>
               later(300 + i * 480 + (line.startsWith('$') ? 0 : 160), () => {
                 const w = workspace.find('terminal')

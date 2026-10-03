@@ -16,7 +16,7 @@ export const traceVertex = /* glsl */ `
     float lip = lipTrace(position) * aWarm;
     float speechGlow = (1.0 + uJaw * .06 * aWarm) * mix(uPresence.x, uPresence.y, aWarm);
     vAlpha = aStrength * (.55 + .45 * fathiDepth(position.z)) * smoothstep(-1.96, -1.74, position.y) * finish.x * speechGlow * 1.08
-           * (1.0 + lip * (.24 + uJaw * .15));
+           * (1.0 + lip * (.24 + uJaw * .15)) * bodyShade(position, normalMatrix);
     vColor = avatarColor(finish.y, aWarm, lip, .20 + uJaw * .07);
   }
 `

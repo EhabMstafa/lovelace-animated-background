@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react'
-import { motion, useDragControls } from 'framer-motion'
+import { useEffect, useState, type ReactNode } from 'react'
+import { animate, motion, useDragControls, useMotionValue } from 'framer-motion'
 import { X, type LucideIcon } from 'lucide-react'
 import { ease } from '../core/tokens'
 import type { Rect } from './layout'
@@ -26,6 +26,18 @@ interface FloatingWindowProps {
 export function FloatingWindow({ rect, origin, title, icon: Icon, active, delay = 0, z, onFocus, onClose, children }: FloatingWindowProps) {
   const drag = useDragControls()
   const [dragging, setDragging] = useState(false)
+  // A surface moved by hand stays put until the workspace rearranges; then it settles back into place.
+  const dx = useMotionValue(0)
+  const dy = useMotionValue(0)
+  useEffect(() => {
+    const settle = { duration: 0.6, ease: ease.out }
+    const a = animate(dx, 0, settle)
+    const b = animate(dy, 0, settle)
+    return () => {
+      a.stop()
+      b.stop()
+    }
+  }, [rect.x, rect.y, rect.w, rect.h, dx, dy])
   // The surface grows from the point nearest PEPO.
   const ox = Math.max(0, Math.min(100, ((origin.x - rect.x) / rect.w) * 100))
   const oy = Math.max(0, Math.min(100, ((origin.y - rect.y) / rect.h) * 100))
@@ -33,21 +45,22 @@ export function FloatingWindow({ rect, origin, title, icon: Icon, active, delay 
   return (
     <motion.section
       className={`floating-window surface ${active ? 'is-active' : ''} ${dragging ? 'is-dragging' : ''}`}
-      style={{ transformOrigin: `${ox}% ${oy}%`, zIndex: z }}
+      style={{ transformOrigin: `${ox}% ${oy}%`, zIndex: z, x: dx, y: dy }}
       onPointerDownCapture={onFocus}
-      initial={{ opacity: 0, scale: 0.4, filter: 'blur(12px)', left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
-      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)', left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
-      exit={{ opacity: 0, scale: 0.45, filter: 'blur(10px)', transition: { duration: 0.34, ease: ease.inOut } }}
+      initial={{ opacity: 0, scale: 0.4, left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
+      animate={{ opacity: 1, scale: 1, left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
+      exit={{ opacity: 0, scale: 0.45, transition: { duration: 0.34, ease: ease.inOut } }}
       transition={{
         opacity: { duration: 0.4, delay },
         scale: { duration: 0.45, ease: ease.out, delay },
-        filter: { duration: 0.45, delay },
         default: { duration: 0.6, ease: ease.out },
       }}
       drag
       dragControls={drag}
       dragListener={false}
       dragMomentum={false}
+      dragConstraints={{ left: -rect.x + 8, top: -rect.y + 56, right: window.innerWidth - rect.x - rect.w - 8, bottom: window.innerHeight - rect.y - 60 }}
+      dragElastic={0.08}
       onDragStart={() => setDragging(true)}
       onDragEnd={() => setDragging(false)}
       aria-label={title}

@@ -1,6 +1,8 @@
 import { Canvas } from '@react-three/fiber'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ErrorBoundary } from '../app/ErrorBoundary'
 import { usePresence } from '../core/presence'
+import { useWorkspace } from '../core/workspace'
 import { useReducedMotion } from '../hooks/useReducedMotion'
 import { FrameGovernor } from './FrameGovernor'
 import { QualityGovernor } from './QualityGovernor'
@@ -32,20 +34,44 @@ export function PresenceLayer({ compact = false }: { compact?: boolean }) {
   }, [form])
 
   // The Avatar's blinks and eye movements need full frame rate to look human.
-  const fps = reducedMotion ? 24 : transforming || form === 'avatar' || !CALM_STATES.has(state) ? 60 : 30
+  // While PEPO works beside open surfaces it is smaller and the page is busier:
+  // it keeps a steady 30 fps when calm and renders at a lower resolution.
+  const busy = useWorkspace().length > 0
+  const calm = CALM_STATES.has(state) || state === 'working'
+  const fps = reducedMotion ? 24 : transforming || (form === 'avatar' && !busy) || !calm ? 60 : 30
+  const maxDpr = busy ? 1.5 : 2
+
+  // If the graphics context is lost (driver reset, GPU memory pressure) and the
+  // browser doesn't restore it, start a fresh canvas instead of staying blank.
+  const [generation, setGeneration] = useState(0)
+  const restartTimer = useRef(0)
+  const restart = () => {
+    window.clearTimeout(restartTimer.current)
+    restartTimer.current = window.setTimeout(() => setGeneration((g) => g + 1), 1200)
+  }
+  useEffect(() => () => window.clearTimeout(restartTimer.current), [])
 
   return (
     <div className="presence-stage" aria-hidden="true">
-      <Canvas
-        frameloop="demand"
-        dpr={[1, 2]}
-        gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-        camera={{ fov: 32, position: [0, 0, 8.2], near: 0.1, far: 50 }}
-      >
-        <FrameGovernor fps={fps} />
-        <QualityGovernor fps={fps} />
-        <PresenceBody state={state} form={form} reducedMotion={reducedMotion} counts={counts} />
-      </Canvas>
+      <ErrorBoundary key={generation} label="presence" onError={restart}>
+        <Canvas
+          frameloop="demand"
+          // Measure the layout size: the stage is scaled with a CSS transform when PEPO steps aside.
+          resize={{ offsetSize: true }}
+          dpr={[1, maxDpr]}
+          gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+          camera={{ fov: 32, position: [0, 0, 8.2], near: 0.1, far: 50 }}
+          onCreated={({ gl }) => {
+            const canvas = gl.domElement
+            canvas.addEventListener('webglcontextlost', restart)
+            canvas.addEventListener('webglcontextrestored', () => window.clearTimeout(restartTimer.current))
+          }}
+        >
+          <FrameGovernor fps={fps} />
+          <QualityGovernor fps={fps} max={maxDpr} />
+          <PresenceBody state={state} form={form} reducedMotion={reducedMotion} counts={counts} />
+        </Canvas>
+      </ErrorBoundary>
     </div>
   )
 }

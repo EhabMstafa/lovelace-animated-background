@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { CodeXml, Folder, Globe, Image, Map as MapIcon, NotebookPen, SquareTerminal, type LucideIcon } from 'lucide-react'
 import { pepoEvents } from '../core/events'
 import { presence } from '../core/presence'
 import { useWorkspace, workspace, type ToolKind, type WorkspaceWindow } from '../core/workspace'
+import { ErrorBoundary } from '../app/ErrorBoundary'
 import { FloatingWindow } from './FloatingWindow'
 import { computeLayout } from './layout'
 import { LightStreams } from './LightStreams'
@@ -54,6 +55,15 @@ function Surface({ win }: { win: WorkspaceWindow }) {
   }
 }
 
+/** A surface that fails to render shows a quiet note; the rest of PEPO carries on. */
+function SurfaceBoundary({ kind, children }: { kind: ToolKind; children: ReactNode }) {
+  return (
+    <ErrorBoundary label={`surface:${kind}`} fallback={<EmptySurface icon={ICONS[kind]} hint="This surface couldn't load. Close it and open it again." />}>
+      {children}
+    </ErrorBoundary>
+  )
+}
+
 /**
  * The near plane's working area. With nothing open it is empty and PEPO
  * sits in the centre. When PEPO acts, it steps aside, surfaces grow out of
@@ -72,6 +82,9 @@ export function SpatialWorkspace() {
     root.style.setProperty('--presence-x', busy ? `${layout.presence.x}px` : '50%')
     root.style.setProperty('--presence-y', busy ? `${layout.presence.y}px` : 'var(--orb-y)')
     root.style.setProperty('--presence-scale', String(layout.presence.scale))
+    root.style.setProperty('--caption-x', `${layout.caption.x}px`)
+    root.style.setProperty('--caption-y', `${layout.caption.y}px`)
+    root.style.setProperty('--caption-w', `${layout.caption.w}px`)
     root.dataset.workspace = busy ? layout.mode : 'empty'
   }, [layout, windows.length])
 
@@ -98,7 +111,8 @@ export function SpatialWorkspace() {
   const newest = [...windows].sort((a, b) => b.openedAt - a.openedAt)[0] ?? null
   useEffect(() => setFront(null), [newest?.id])
   const latest = sheet ? windows.find((win) => win.id === front) ?? newest : null
-  const shown = sheet ? (latest ? [latest] : []) : windows
+  // Elsewhere, as many as fit; the rest wait in the dock until brought forward.
+  const shown = sheet ? (latest ? [latest] : []) : windows.filter((win) => layout.rects[win.id])
 
   return (
     <div className="workspace" aria-label="Workspace">
@@ -124,7 +138,9 @@ export function SpatialWorkspace() {
                 workspace.close(win.id)
               }}
             >
-              <Surface win={win} />
+              <SurfaceBoundary kind={win.kind}>
+                <Surface win={win} />
+              </SurfaceBoundary>
             </FloatingWindow>
           ) : null,
         )}

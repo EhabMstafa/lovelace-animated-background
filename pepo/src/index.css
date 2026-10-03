@@ -666,14 +666,23 @@ button:focus-visible, input:focus-visible { outline: 1px solid rgba(75, 200, 255
 :root[data-workspace='desktop'] .caption,
 :root[data-workspace='tablet'] .caption {
   position: absolute;
-  left: var(--presence-x);
-  top: calc(var(--presence-y) + var(--stage) * 0.27);
-  width: min(36vw, 520px);
+  left: var(--caption-x);
+  top: var(--caption-y);
+  width: var(--caption-w);
   transform: translateX(-50%);
   margin: 0;
+  z-index: 5;
 }
 :root[data-workspace='desktop'] .caption p,
-:root[data-workspace='tablet'] .caption p { font-size: 16px; text-wrap: balance; }
+:root[data-workspace='tablet'] .caption p {
+  font-size: 15px;
+  line-height: 1.45;
+  text-wrap: balance;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
 /* ───────── dock shelf ───────── */
 .dock-wrap { position: relative; display: flex; justify-content: center; }

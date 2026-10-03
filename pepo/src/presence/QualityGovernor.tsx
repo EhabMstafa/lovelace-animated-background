@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 
 /**
@@ -6,10 +6,17 @@ import { useFrame, useThree } from '@react-three/fiber'
  * longer than the paced target, rendering resolution steps down; with
  * steady headroom it climbs back slowly. Pauses (hidden tab) are ignored.
  */
-export function QualityGovernor({ fps }: { fps: number }) {
+export function QualityGovernor({ fps, max: cap = 2 }: { fps: number; max?: number }) {
   const setDpr = useThree((s) => s.setDpr)
-  const max = Math.min(window.devicePixelRatio || 1, 2)
+  const max = Math.min(window.devicePixelRatio || 1, cap)
   const dpr = useRef(max)
+  // A lower ceiling (PEPO beside open surfaces) applies at once; a higher one is earned again.
+  useEffect(() => {
+    if (dpr.current > max) {
+      dpr.current = max
+      setDpr(max)
+    }
+  }, [max, setDpr])
   const stats = useRef({ last: 0, sum: 0, n: 0, calm: 0 })
 
   useFrame(() => {

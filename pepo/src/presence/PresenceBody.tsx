@@ -151,6 +151,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       uLean: { value: 0 },
       uFaceScale: { value: 1.18 },
       uFaceOffset: { value: new THREE.Vector3(0, -0.32, 0) },
+      uVolume: { value: 1 },
     }),
     [],
   )
@@ -439,10 +440,9 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
 
     // Tiny parallax toward the pointer: PEPO notices you; it doesn't chase you.
     if (root.current) {
-      // FATHI is a shallow relief: keep its parallax small so it never turns into a cut-out.
-      const tilt = 1 - m * 0.75
-      root.current.rotation.y = damp(root.current.rotation.y, ptr.x * 0.07 * tilt, 1.2, dt)
-      root.current.rotation.x = damp(root.current.rotation.x, ptr.y * 0.05 * tilt, 1.2, dt)
+      // With its volume, FATHI turns with the viewer a little more: the parallax shows its depth.
+      root.current.rotation.y = damp(root.current.rotation.y, ptr.x * (0.07 + 0.03 * m), 1.2, dt)
+      root.current.rotation.x = damp(root.current.rotation.x, ptr.y * (0.05 + 0.01 * m), 1.2, dt)
       root.current.position.x = damp(root.current.position.x, ptr.x * 0.04, 1.2, dt)
       root.current.position.y = damp(root.current.position.y, -ptr.y * 0.03, 1.2, dt)
     }

@@ -99,13 +99,22 @@ PEPO acts:
 - **Surfaces arrive:** each one grows out of PEPO's light (it scales up from
   the corner nearest PEPO) and the arrangement settles around the task.
 - **Layout:** one large surface, then a large surface over a smaller one,
-  then a large surface over two side by side, then a grid.
+  then a large surface over two side by side, then a grid. Side by side
+  (PEPO in a column on the left) on wide screens, stacked (PEPO above, its
+  words under it, the work below) on narrow ones, a bottom sheet on phones.
+  PEPO's body always stays clear of the header and its words clear of the
+  surfaces.
+- **Only what fits:** as many surfaces are shown as stay readable (up to
+  four). The one just opened or brought forward is always shown, and the
+  richest tools fill the rest; the others wait in the dock, marked with a
+  dot, until brought forward.
 - **Light streams:** fine particles travel from PEPO to a surface when it
   appears and for as long as PEPO is writing into it, marked by a small
   pulse in the surface's label.
 - **Surfaces:** a hairline border, a whisper of glass, a small label and a
   quiet close button. The header is the drag handle, and there is no OS
-  chrome.
+  chrome. A surface moved by hand stays put until the workspace rearranges,
+  then settles back into place.
 - **Putting it away:** closing every surface (or pressing Esc) returns PEPO
   to the centre.
 - **Phones:** PEPO rises to the top, and the newest tool opens as a bottom
@@ -177,6 +186,15 @@ intact (jaw and mouth corners under the mask, blinks and squint, brows, chest
 breathing, head pose pivoting at the neck), plus two additions: the eyes
 follow the gaze, and the head and chest can lean forward.
 
+**Volume.** FATHI is drawn as a shallow relief (its depth is about a tenth
+of its width), so on its own it reads flat. The shader lays the same points
+onto a simple body: the head is an egg whose width follows FATHI's own
+silhouette, the neck a cylinder and the chest a shallow barrel with the
+shoulders falling back. The original relief stays on top as detail.
+Perspective is compensated, so the front view keeps FATHI's exact drawing.
+As the head turns, and with the small pointer parallax, the form shows its
+depth. A soft key light from above-left shades the turning planes.
+
 The appearance is exactly FATHI's original:
 - **Colors:** the same azure line work and radiant red-orange mask (the
   original `#20dcff` and `#ff7b36` uniforms, in the same linear colour
@@ -234,6 +252,13 @@ project's ownership.
 - `frameloop="demand"` redraws at 30 fps in calm states and 60 fps in active ones. Nothing is drawn while the tab is hidden.
 - Fewer particles at phone widths. `prefers-reduced-motion` slows time and switches off parallax.
 - The background is static apart from CSS-variable parallax.
+- While surfaces are open, PEPO renders at up to 1.5× resolution and at
+  30 fps when calm.
+- The presence canvas measures its layout size, not its on-screen size, so
+  the CSS scale used when PEPO steps aside never makes it shrink twice.
+- A lost graphics context that the browser doesn't restore gets a fresh
+  canvas. A surface that fails to render shows a quiet note instead of
+  taking the page down.
 - Adaptive quality: if frames take much longer than the paced target,
   rendering resolution steps down (2 → 1.5 → 1); with steady headroom it
   climbs back slowly.
