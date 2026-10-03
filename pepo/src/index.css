@@ -141,6 +141,8 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--focus); out
 .ambient-canvas.is-front { opacity: 1; z-index: 1; }
 /* The scene being replaced stays until the new one has faded in over it. */
 .ambient-canvas:not(.is-front) { transition-delay: 0s, 0.32s; }
+/* The Orb's light and the vignette sit over whichever scene is in front. */
+.ambient-orb-reflection, .ambient-vignette { z-index: 2; }
 
 .parallax-far {
   transform: translate3d(calc(var(--px) * -4px), calc(var(--py) * -2px), 0);
