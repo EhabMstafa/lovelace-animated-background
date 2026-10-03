@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { presence, type PresenceForm, type PresenceState } from '../core/presence'
 import { getPointer, pointerActive } from '../hooks/usePointer'
 import { createHumanMotion, presenceLight, type AvatarState } from './avatar/humanMotion'
-import { traceFragment, traceVertex } from './avatar/shaders'
+import { shellFragment, shellVertex, traceFragment, traceVertex } from './avatar/shaders'
 import { useHeadCloud } from './avatar/useHeadCloud'
 import { bodyFragment, bodyVertex } from './body/particleShaders'
 import { createRibbonGeometry, ribbonVertex } from './lines'
@@ -51,7 +51,8 @@ const ORBITS: OrbitSpec[] = [
 const RADIUS = 1
 const GLOW_SIZE = 4.6
 const TILT = new THREE.Euler(0.18, 0, -0.12)
-const MORPH_SECONDS = 1.55
+/** Switching between Orb and Avatar is a calm cross-fade; the face never breaks apart. */
+const SWITCH_SECONDS = 1.1
 
 /** PEPO's presence states, as the Avatar's body language understands them. */
 const AVATAR_STATE: Record<PresenceState, AvatarState> = {
@@ -91,6 +92,9 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
   /** Layers that exist only in the Orb; hidden (not drawn) in the Avatar. */
   const orbOnly = useRef<(THREE.Object3D | null)[]>([])
   const keep = (i: number) => (el: THREE.Object3D | null) => void (orbOnly.current[i] = el)
+  /** Layers that exist only in the Avatar. */
+  const faceOnly = useRef<(THREE.Object3D | null)[]>([])
+  const face = (i: number) => (el: THREE.Object3D | null) => void (faceOnly.current[i] = el)
   const { gl, size } = useThree()
   const pixelRatio = gl.getPixelRatio()
 
@@ -120,8 +124,17 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.BufferAttribute(cloud.traceSegments, 3))
     g.setAttribute('aStrength', new THREE.BufferAttribute(cloud.traceStrength, 1))
-    g.setAttribute('aProgress', new THREE.BufferAttribute(cloud.traceProgress, 1))
     g.setAttribute('aWarm', new THREE.BufferAttribute(cloud.traceWarm, 1))
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 3)
+    return g
+  }, [cloud])
+
+  const shellGeo = useMemo(() => {
+    if (!cloud) return null
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(cloud.shellPosition, 3))
+    g.setAttribute('aCoverage', new THREE.BufferAttribute(cloud.shellCoverage, 1))
+    g.setIndex(new THREE.BufferAttribute(cloud.shellIndex, 1))
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 3)
     return g
   }, [cloud])
@@ -155,34 +168,59 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     [],
   )
 
+  // One uniform set, two passes over the same particles: the Orb and the Avatar.
+  const bodyUniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uRot: { value: 0 },
+      uFlow: { value: 0 },
+      uScale: { value: 1 },
+      uOrbBreath: { value: 0 },
+      uConverge: { value: 0 },
+      uDepth: { value: 0 },
+      uViolet: { value: 0 },
+      uListen: { value: 0 },
+      uSpeak: { value: 0 },
+      uEnergy: { value: 0 },
+      uGlow: { value: 1 },
+      uSize: { value: 2.2 },
+      uPixelRatio: { value: pixelRatio },
+      uOrbTilt: { value: new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationFromEuler(TILT)) },
+          // Full density draws finer, fainter points; the phone subset fewer, brighter ones.
+          uFaceGain: { value: counts.total > 100000 ? 0.62 : 1.0 },
+          ...pose,
+    }),
+    [pixelRatio, pose, counts.total],
+  )
   const bodyMat = useMemo(
     () =>
       additive({
         vertexShader: bodyVertex,
         fragmentShader: bodyFragment,
-        uniforms: {
-          uTime: { value: 0 },
-          uRot: { value: 0 },
-          uFlow: { value: 0 },
-          uScale: { value: 1 },
-          uOrbBreath: { value: 0 },
-          uConverge: { value: 0 },
-          uDepth: { value: 0 },
-          uViolet: { value: 0 },
-          uListen: { value: 0 },
-          uSpeak: { value: 0 },
-          uEnergy: { value: 0 },
-          uGlow: { value: 1 },
-          uSize: { value: 2.2 },
-          uPixelRatio: { value: pixelRatio },
-          uMorph: { value: 0 },
-          uOrbTilt: { value: new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationFromEuler(TILT)) },
-          // Fewer, brighter points on phones; finer, fainter points at full density.
-          uFaceGain: { value: counts.total > 100000 ? 0.72 : 1.0 },
-          ...pose,
-        },
+        uniforms: { ...bodyUniforms, uOpacity: { value: 1 } },
       }),
-    [pixelRatio, pose, counts.total],
+    [bodyUniforms],
+  )
+  const faceMat = useMemo(
+    () =>
+      additive({
+        vertexShader: bodyVertex,
+        fragmentShader: bodyFragment,
+        defines: { FACE_PASS: 1 },
+        uniforms: { ...bodyUniforms, uOpacity: { value: 0 } },
+      }),
+    [bodyUniforms],
+  )
+  const shellMat = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        vertexShader: shellVertex,
+        fragmentShader: shellFragment,
+        transparent: true,
+        depthWrite: false,
+        uniforms: { uOpacity: { value: 0 }, ...pose },
+      }),
+    [pose],
   )
 
   const fade = useMemo(() => ({ value: 1 }), [])
@@ -274,7 +312,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       additive({
         vertexShader: traceVertex,
         fragmentShader: traceFragment,
-        uniforms: { uReveal: { value: 0 }, ...pose },
+        uniforms: { uOpacity: { value: 0 }, ...pose },
       }),
     [pose],
   )
@@ -292,11 +330,12 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
   useEffect(
     () => () => {
       ;[particleGeo, streamGeo, innerStreamGeo, starGeo, nodeGeo, ...orbitGeos].forEach((g) => g.dispose())
-      ;[bodyMat, streamMat, innerStreamMat, starMat, skinMat, glowMat, traceMat, ...orbitMats, ...nodeMats].forEach((m) => m.dispose())
+      ;[bodyMat, faceMat, shellMat, streamMat, innerStreamMat, starMat, skinMat, glowMat, traceMat, ...orbitMats, ...nodeMats].forEach((m) => m.dispose())
     },
-    [particleGeo, streamGeo, innerStreamGeo, starGeo, nodeGeo, orbitGeos, bodyMat, streamMat, innerStreamMat, starMat, skinMat, glowMat, traceMat, orbitMats, nodeMats],
+    [particleGeo, streamGeo, innerStreamGeo, starGeo, nodeGeo, orbitGeos, bodyMat, faceMat, shellMat, streamMat, innerStreamMat, starMat, skinMat, glowMat, traceMat, orbitMats, nodeMats],
   )
   useEffect(() => () => traceGeo?.dispose(), [traceGeo])
+  useEffect(() => () => shellGeo?.dispose(), [shellGeo])
 
   const qFree = useMemo(() => new THREE.Quaternion(), [])
   const qAligned = useMemo(() => new THREE.Quaternion(), [])
@@ -323,14 +362,20 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     c.rot += dt * timeScale * p.spin * Math.PI * 2 * 0.25
     c.flow += dt * timeScale * p.activity * 0.6
 
-    // Orb ↔ Avatar: a steady walk; the per-particle easing lives in the shader.
+    // Orb ↔ Avatar: the Orb fades away, then FATHI fades in whole.
     const morphTarget = form === 'avatar' && cloud ? 1 : 0
-    const step = dt / (reducedMotion ? MORPH_SECONDS * 0.6 : MORPH_SECONDS)
+    const step = dt / (reducedMotion ? SWITCH_SECONDS * 0.6 : SWITCH_SECONDS)
     c.morph = morphTarget > c.morph ? Math.min(1, c.morph + step) : Math.max(0, c.morph - step)
     const m = c.morph
-    const orbVisible = 1 - THREE.MathUtils.smoothstep(m, 0, 0.55)
+    const orbVisible = 1 - THREE.MathUtils.smoothstep(m, 0, 0.6)
+    const faceVisible = THREE.MathUtils.smoothstep(m, 0.4, 1)
     fade.value = orbVisible
     for (const obj of orbOnly.current) if (obj) obj.visible = orbVisible > 0.001
+    bodyMat.uniforms.uOpacity.value = orbVisible
+    faceMat.uniforms.uOpacity.value = faceVisible
+    shellMat.uniforms.uOpacity.value = faceVisible
+    traceMat.uniforms.uOpacity.value = faceVisible
+    for (const obj of faceOnly.current) if (obj) obj.visible = faceVisible > 0.001
 
     // The Avatar's life: natural human motion (see avatar/humanMotion.ts).
     // Only speech output reaches it; the microphone never moves the face.
@@ -368,14 +413,11 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     u.uSpeak.value = p.speak
     u.uEnergy.value = c.energy
     u.uGlow.value = p.glow
-    u.uMorph.value = m
-    traceMat.uniforms.uReveal.value = THREE.MathUtils.smoothstep(m, 0.55, 1)
 
     if (fieldGroup.current) fieldGroup.current.scale.setScalar(p.scale * (1 + m * 0.25))
     if (spinGroup.current) {
       spinGroup.current.rotation.y = c.rot
-      // The glass swells a little as it dissolves.
-      spinGroup.current.scale.setScalar(p.scale * (1 + m * 0.25))
+        spinGroup.current.scale.setScalar(p.scale * (1 + m * 0.25))
     }
 
     streamMat.uniforms.uTime.value = c.t
@@ -454,7 +496,9 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
       </group>
 
       <points geometry={particleGeo} material={bodyMat} renderOrder={3} frustumCulled={false} />
-      {traceGeo && <lineSegments geometry={traceGeo} material={traceMat} renderOrder={4} frustumCulled={false} />}
+      {shellGeo && <mesh ref={face(0)} geometry={shellGeo} material={shellMat} renderOrder={6} frustumCulled={false} visible={false} />}
+      <points ref={face(1)} geometry={particleGeo} material={faceMat} renderOrder={7} frustumCulled={false} visible={false} />
+      {traceGeo && <lineSegments ref={face(2)} geometry={traceGeo} material={traceMat} renderOrder={8} frustumCulled={false} visible={false} />}
 
       {ORBITS.map((o, i) => (
         <group

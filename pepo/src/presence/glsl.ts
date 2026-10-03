@@ -125,45 +125,17 @@ export const fathiRig = /* glsl */ `
 
   vec3 faceToWorld(vec3 p) { return (p - uFaceOffset) * uFaceScale; }
 
-  // Saturated avatar palette: kept low in red so dense additive light stays
-  // blue instead of washing out to white.
-  const vec3 A_ELECTRIC = vec3(0.08, 0.32, 1.00);
-  const vec3 A_AZURE    = vec3(0.00, 0.58, 1.00);
-  const vec3 A_CYAN     = vec3(0.00, 0.86, 1.00);
-  const vec3 A_ICE      = vec3(0.62, 0.93, 1.00);
-  /** The mask: FATHI's radiant orange, warming to amber where the light lands. */
-  vec3 maskTone(float lit) {
-    return mix(vec3(1.00, 0.46, 0.16), vec3(1.00, 0.78, 0.52), smoothstep(0.25, 1.0, lit));
+  // FATHI's original colours, exactly as its renderer drew them: the
+  // #20dcff and #ff7b36 uniforms in three.js's linear working space.
+  const vec3 F_CYAN  = vec3(0.0144, 0.7157, 1.0);
+  const vec3 F_AMBER = vec3(1.0, 0.1980, 0.0369);
+
+  vec3 avatarColor(float warmTint, float warm, float lip, float lipGain) {
+    vec3 c = mix(F_CYAN, F_AMBER, warmTint);
+    c = mix(c, vec3(1.0, .50, .30), lip * lipGain);
+    return mix(c, vec3(1.0, .53, .29), uPresence.z * .22 * (1.0 - warm));
   }
 
-  /** Light on the relief: x wrapped key light, y specular, z edge (relief rim). */
-  vec3 reliefLight(vec3 n) {
-    const vec3 KEY = normalize(vec3(-0.55, 0.5, 0.68));
-    float d = dot(n, KEY);
-    float wrap = clamp((d + 0.35) / 1.35, 0.0, 1.0);
-    float spec = pow(max(d, 0.0), 10.0);
-    float rim = pow(clamp(1.0 - n.z, 0.0, 1.0), 1.4);
-    return vec3(wrap, spec, rim);
-  }
-
-  /**
-   * FATHI lit as a relief, in PEPO's light: electric blue in shadow, azure in
-   * light, vivid cyan where the key light lands and along the relief's edges.
-   * The mask carries its own tone so it reads as fabric over the face.
-   */
-  vec3 avatarColor(vec3 bind, float warm, float lip, vec3 light) {
-    float wrap = light.x, spec = light.y, rim = light.z;
-    vec3 cool = mix(A_ELECTRIC, A_AZURE, smoothstep(0.2, 0.75, wrap));
-    cool = mix(cool, A_CYAN, smoothstep(0.6, 1.0, wrap) * 0.75 + rim * 0.45);
-    cool = mix(cool, A_ICE, spec * 0.45);
-    // Shoulders sink into deeper blue; the far upper right catches a hint of violet, as the Orb does.
-    cool = mix(cool, A_ELECTRIC * 0.8, smoothstep(-1.0, -1.7, bind.y) * 0.5);
-    vec2 d = bind.xy - vec2(0.0, -0.2);
-    float ur = 0.5 + 0.5 * dot(d / max(length(d), 1e-4), VIOLET_DIR2);
-    cool = mix(cool, C_VIOLET, smoothstep(0.82, 1.0, ur) * 0.18);
-    cool = mix(cool, C_VIOLET, uPresence.z * 0.35);
-    vec3 maskCol = mix(maskTone(wrap), A_ICE, spec * 0.3);
-    vec3 col = mix(cool, maskCol, warm);
-    return mix(col, maskTone(1.0), lip * (0.45 + uJaw * 0.1));
-  }
+  /** Brightness falls off with distance, as in the original camera setup. */
+  float fathiDepth(float z) { return clamp(0.5 + 0.57 * (z - 0.11), 0.0, 1.0); }
 `

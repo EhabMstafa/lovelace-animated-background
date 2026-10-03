@@ -7,11 +7,13 @@
 export interface HeadCloud {
   /** xyz per particle. */
   position: Float32Array
-  /** Surface normal per particle, from the smoothed relief. */
-  normal: Float32Array
   weight: Float32Array
   /** 0 = cool line work (face, neck, shoulders), 1 = warm (the mask). */
   warm: Float32Array
+  /** The solid body behind the drawing: grid mesh with coverage per vertex. */
+  shellPosition: Float32Array
+  shellCoverage: Float32Array
+  shellIndex: Uint32Array
   /** Strand segments: two xyz endpoints each. */
   traceSegments: Float32Array
   traceStrength: Float32Array
@@ -26,27 +28,37 @@ export interface HeadCloud {
 export function decodeFathi(buffer: ArrayBuffer, total: number): HeadCloud {
   const dv = new DataView(buffer)
   const magic = String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3))
-  if (magic !== 'PFA2') throw new Error('avatar asset: bad magic')
+  if (magic !== 'PFA3') throw new Error('avatar asset: bad magic')
   const n = dv.getUint32(4, true)
   const segs = dv.getUint32(8, true)
   const Q = dv.getFloat32(12, true)
+  const shellN = dv.getUint32(16, true)
+  const shellI = dv.getUint32(20, true)
 
   const srcPos = new Float32Array(n * 3)
   const srcW = new Float32Array(n)
   const srcWarm = new Float32Array(n)
-  const srcN = new Float32Array(n * 3)
-  let o = 16
+  let o = 24
   for (let i = 0; i < n; i++) {
     srcPos[i * 3] = dv.getInt16(o, true) / Q
     srcPos[i * 3 + 1] = dv.getInt16(o + 2, true) / Q
     srcPos[i * 3 + 2] = dv.getInt16(o + 4, true) / Q
     srcW[i] = dv.getUint8(o + 6) / 255
     srcWarm[i] = dv.getUint8(o + 7) / 255
-    srcN[i * 3] = dv.getInt8(o + 8) / 127
-    srcN[i * 3 + 1] = dv.getInt8(o + 9) / 127
-    srcN[i * 3 + 2] = dv.getInt8(o + 10) / 127
-    o += 12
+    o += 8
   }
+
+  const shellPosition = new Float32Array(shellN * 3)
+  const shellCoverage = new Float32Array(shellN)
+  for (let i = 0; i < shellN; i++) {
+    shellPosition[i * 3] = dv.getInt16(o, true) / Q
+    shellPosition[i * 3 + 1] = dv.getInt16(o + 2, true) / Q
+    shellPosition[i * 3 + 2] = dv.getInt16(o + 4, true) / Q
+    shellCoverage[i] = dv.getUint8(o + 6) / 255
+    o += 8
+  }
+  const shellIndex = new Uint32Array(shellI)
+  for (let i = 0; i < shellI; i++, o += 4) shellIndex[i] = dv.getUint32(o, true)
 
   // Choose which source points to draw: all of them, or a weight-biased subset.
   const order: number[] = []
@@ -59,15 +71,13 @@ export function decodeFathi(buffer: ArrayBuffer, total: number): HeadCloud {
     }
   }
   const position = new Float32Array(total * 3)
-  const normal = new Float32Array(total * 3)
   const weight = new Float32Array(total)
   const warm = new Float32Array(total)
   for (let k = 0; k < total; k++) {
     const extra = k >= order.length
     const i = order[extra ? (k * 7919) % order.length : k]
     position.set(srcPos.subarray(i * 3, i * 3 + 3), k * 3)
-    normal.set(srcN.subarray(i * 3, i * 3 + 3), k * 3)
-    weight[k] = extra ? srcW[i] * 0.15 : srcW[i]
+    weight[k] = extra ? 0 : srcW[i]
     warm[k] = srcWarm[i]
   }
 
@@ -84,5 +94,5 @@ export function decodeFathi(buffer: ArrayBuffer, total: number): HeadCloud {
     traceWarm[s * 2] = traceWarm[s * 2 + 1] = dv.getUint8(o + 16)
     o += 18
   }
-  return { position, normal, weight, warm, traceSegments, traceStrength, traceProgress, traceWarm }
+  return { position, weight, warm, shellPosition, shellCoverage, shellIndex, traceSegments, traceStrength, traceProgress, traceWarm }
 }

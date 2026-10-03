@@ -1,10 +1,9 @@
 import { fathiRig, helpers, palette } from '../glsl'
 
 /**
- * One particle system, two bodies. Every particle knows where it lives in
- * the Orb (`position`) and where it lives in the Avatar (`aFace`). `uMorph`
- * carries each one along its own curved path between the two, so the
- * Orb ↔ Avatar transformation is physically continuous.
+ * One particle buffer, two bodies, drawn in two passes: the Orb pass reads
+ * `position`, the Avatar pass (FACE_PASS) reads `aFace`. Switching forms
+ * cross-fades the passes; the face is never broken apart.
  */
 export const bodyVertex = /* glsl */ `
   ${palette}
@@ -25,15 +24,14 @@ export const bodyVertex = /* glsl */ `
   uniform float uGlow;
   uniform float uSize;
   uniform float uPixelRatio;
-  uniform float uMorph;
   uniform mat3 uOrbTilt;
   uniform float uFaceGain;
+  uniform float uOpacity;
 
   attribute vec4 aSeed;
   attribute float aKind;     // orb: 0 shell, 1 inner, 2 halo, 3 latent (hidden in the Orb)
   attribute vec3 aAxis;
   attribute vec3 aFace;      // avatar position (FATHI units)
-  attribute vec3 aFaceN;     // avatar relief normal
   attribute float aFaceKind; // avatar: 0 cool line work … 1 warm (mask)
   attribute float aFaceW;    // avatar: artwork weight
 
@@ -98,71 +96,33 @@ export const bodyVertex = /* glsl */ `
     alpha *= 1.0 - latent;
   }
 
-  // ── Avatar body: FATHI ─────────────────────────────────────
+  // ── Avatar body: FATHI, exactly as its original renderer drew it ──
   void faceBody(out vec4 mv, out vec3 color, out float alpha, out float size) {
     vec3 bind = aFace;
     float warm = aFaceKind;
     vec3 p = rigPosition(bind, warm);
     mv = modelViewMatrix * vec4(faceToWorld(p), 1.0);
-
-    // The relief turns with the head, so its light moves with it.
-    float headW = smoothstep(-1.35, -.48, bind.y);
-    vec3 n = normalize(aFaceN + vec3(uHead.x, -uHead.y, 0.0) * headW * vec3(1.0, 1.0, 0.0));
-    vec3 light = reliefLight(n);
-
-    float depth = smoothstep(-0.3, 0.45, bind.z);
     vec2 finish = finishAt(bind, warm);
     float lip = lipTrace(bind) * warm;
     float speechGlow = (1.0 + uJaw * .06 * warm) * mix(uPresence.x, uPresence.y, warm);
-    float shade = 0.4 + 0.85 * light.x + 0.45 * light.z + 0.5 * light.y;
-    // The mask glows: FATHI's radiant orange carries more light than the line work.
-    alpha = aFaceW * (0.5 + 0.5 * depth) * uFaceGain * shade * (1.0 + 0.7 * warm) * smoothstep(-1.96, -1.74, bind.y)
+    alpha = aFaceW * (0.55 + 0.45 * fathiDepth(bind.z)) * 0.98 * uFaceGain * smoothstep(-1.96, -1.74, bind.y)
           * finish.x * speechGlow * (1.0 + lip * (.65 + uJaw * .22));
-    color = avatarColor(bind, finish.y, lip, light);
-    // Full-density artwork: fine points, like a high-resolution drawing.
-    size = 0.55 + 0.22 * aSeed.y;
+    color = avatarColor(finish.y, warm, lip, .42 + uJaw * .08);
+    size = 0.62 + 0.0 * aSeed.y;
   }
 
   void main() {
-    vec4 mvOrb, mvFace;
-    vec3 cOrb, cFace;
-    float alphaOrb, alphaFace, sizeOrb, sizeFace;
-    orbBody(mvOrb, cOrb, alphaOrb, sizeOrb);
-
-    float e = 0.0;
-    vec4 mv = mvOrb;
-    vec3 color = cOrb;
-    float alpha = alphaOrb;
-    float size = sizeOrb;
-
-    if (uMorph > 0.0001) {
-      faceBody(mvFace, cFace, alphaFace, sizeFace);
-      // Each particle leaves on its own schedule; the crown forms first.
-      float height = clamp(aFace.y * 0.55 + 0.7, 0.0, 1.0);
-      float delay = aSeed.y * 0.5 + (1.0 - height) * 0.25;
-      float lp = clamp((uMorph * 1.6 - delay) / 0.85, 0.0, 1.0);
-      e = lp * lp * (3.0 - 2.0 * lp);
-      float mid = sin(3.14159 * e);
-
-      vec3 p = mix(mvOrb.xyz, mvFace.xyz, e);
-      // Dissolve into a loose swirl of light, then condense into the face.
-      vec3 centre = (modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-      vec3 rel = p - centre;
-      float ang = mid * (0.6 + aSeed.z * 0.8) * (aSeed.x > 0.5 ? 1.0 : -1.0);
-      float c = cos(ang), s = sin(ang);
-      rel.xz = mat2(c, -s, s, c) * rel.xz;
-      rel += normalize(rel + 1e-4) * mid * (0.18 + 0.32 * aSeed.w);
-      rel += (aSeed.xyz - 0.5) * mid * 0.28;
-      mv = vec4(centre + rel, 1.0);
-
-      color = mix(cOrb, cFace, e);
-      alpha = mix(alphaOrb, alphaFace, e) * (1.0 + mid * 0.5);
-      size = mix(sizeOrb, sizeFace, e);
-    }
-
-    vAlpha = alpha * uGlow;
+    vec4 mv;
+    vec3 color;
+    float alpha, size;
+  #ifdef FACE_PASS
+    faceBody(mv, color, alpha, size);
+  #else
+    orbBody(mv, color, alpha, size);
+  #endif
+    vAlpha = alpha * uGlow * uOpacity;
     if (vAlpha < 0.002) {
-      // Invisible (latent Orb particles): skip rasterising entirely.
+      // Invisible (latent Orb particles, faded passes): skip rasterising.
       gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
       gl_PointSize = 0.0;
       return;
@@ -177,9 +137,18 @@ export const bodyFragment = /* glsl */ `
   varying vec3 vColor;
   varying float vAlpha;
   void main() {
+  #ifdef FACE_PASS
+    // FATHI's own point: a crisp disc with a hot centre.
+    vec2 c = gl_PointCoord - 0.5;
+    float r = dot(c, c);
+    if (r > 0.25) discard;
+    float f = 1.0 - r * 4.0;
+    gl_FragColor = vec4(vColor, vAlpha * (f * f * f + f * 0.18));
+  #else
     float d = length(gl_PointCoord - 0.5);
     float core = pow(smoothstep(0.5, 0.0, d), 2.0);
     if (core * vAlpha < 0.004) discard;
     gl_FragColor = vec4(vColor, core * vAlpha);
+  #endif
   }
 `

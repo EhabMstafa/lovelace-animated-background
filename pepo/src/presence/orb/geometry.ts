@@ -73,7 +73,6 @@ export function createOrbParticles(counts: ParticleCounts, seed = 7) {
   geo.setAttribute('aKind', new THREE.BufferAttribute(kind, 1))
   geo.setAttribute('aAxis', new THREE.BufferAttribute(axis, 3))
   geo.setAttribute('aFace', new THREE.BufferAttribute(new Float32Array(total * 3), 3))
-  geo.setAttribute('aFaceN', new THREE.BufferAttribute(new Float32Array(total * 3), 3))
   geo.setAttribute('aFaceKind', new THREE.BufferAttribute(new Float32Array(total), 1))
   geo.setAttribute('aFaceW', new THREE.BufferAttribute(new Float32Array(total), 1))
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 3)
@@ -82,7 +81,6 @@ export function createOrbParticles(counts: ParticleCounts, seed = 7) {
 
 export interface FaceData {
   position: Float32Array
-  normal: Float32Array
   weight: Float32Array
   warm: Float32Array
 }
@@ -103,18 +101,16 @@ export function assignFaceTargets(geo: THREE.BufferGeometry, face: FaceData) {
   )
   const faceOrder = Array.from({ length: m }, (_, i) => i).sort((a, b) => face.position[a * 3 + 1] - face.position[b * 3 + 1])
   const fp = geo.getAttribute('aFace') as THREE.BufferAttribute
-  const fn = geo.getAttribute('aFaceN') as THREE.BufferAttribute
   const fk = geo.getAttribute('aFaceKind') as THREE.BufferAttribute
   const fw = geo.getAttribute('aFaceW') as THREE.BufferAttribute
   for (let r = 0; r < n; r++) {
     const o = orbOrder[r]
     const f = faceOrder[Math.min(m - 1, Math.floor((r / n) * m))]
     fp.setXYZ(o, face.position[f * 3], face.position[f * 3 + 1], face.position[f * 3 + 2])
-    fn.setXYZ(o, face.normal[f * 3], face.normal[f * 3 + 1], face.normal[f * 3 + 2])
     fk.setX(o, face.warm[f])
     fw.setX(o, face.weight[f])
   }
-  for (const a of [fp, fn, fk, fw]) a.needsUpdate = true
+  for (const a of [fp, fk, fw]) a.needsUpdate = true
 }
 
 /**

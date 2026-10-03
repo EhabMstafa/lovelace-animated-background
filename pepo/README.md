@@ -93,13 +93,9 @@ transitions.
 
 ### Orb ↔ Avatar
 
-The Orb and the Avatar are the same particles. Each one stores a position
-in the Orb and a position on the face. The two sets are paired by height, so
-the top of the Orb becomes the crown and the bottom becomes the shoulders.
-During the 1.5 s transformation, each particle leaves on its own schedule,
-loosens into a swirl and condenses into the head. The glass, orbits and
-streams fade out, and then the face's traces draw themselves in along their
-length.
+The Orb and the Avatar share one particle buffer, drawn in two passes.
+Switching forms is a calm 1.1 s cross-fade: the Orb fades away, then FATHI
+fades in whole. The face is never broken apart or dissolved into particles.
 
 The form is the viewer's choice (`PresenceToggle`, or
 `presence.update({ form: 'avatar' | 'orb' })`). It never changes on its own,
@@ -120,12 +116,16 @@ intact (jaw and mouth corners under the mask, blinks and squint, brows, chest
 breathing, head pose pivoting at the neck), plus two additions: the eyes
 follow the gaze, and the head and chest can lean forward.
 
-Every point carries a surface normal, estimated at bake time from a smoothed
-height field of FATHI's depth. That lets the renderer light the artwork as a
-3D relief: a key light from the upper left that turns with the head, specular
-highlights and bright relief edges. The line work is saturated electric blue,
-azure and cyan. The mask is FATHI's radiant orange, warming to amber where
-the light lands.
+The appearance is exactly FATHI's original:
+- **Colors:** the same azure line work and radiant red-orange mask (the
+  original `#20dcff` and `#ff7b36` uniforms, in the same linear colour
+  space).
+- **Rendering:** the same lip line, ear and temple finish, depth falloff and
+  crisp point shape.
+- **Solid body:** the drawing's own silhouette, filled, smoothed and baked
+  with FATHI's depth. It is drawn opaque behind the points and follows the
+  same rig, so the avatar is always a solid, complete person and never a
+  see-through hologram. The drawing itself is unchanged.
 
 #### Natural human motion
 
