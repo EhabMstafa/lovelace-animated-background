@@ -43,12 +43,12 @@ src/
 │  ├─ body/particleShaders.ts   one particle system, two arrangements (Orb / Avatar) and the morph
 │  ├─ orb/                      state language, geometry, glass/stream/orbit/star shaders
 │  ├─ avatar/
-│  │  ├─ assets/head.bin        compact 3D head scan (built by scripts/build-head.mjs)
-│  │  ├─ scanHead.ts            scan → lit point cloud, draped mask, contours, creases, strands
-│  │  ├─ headWorker.ts          builds the cloud off the main thread
-│  │  └─ shaders.ts             hairline traces (contours, eyelids, ears, mask weave, neck strands)
+│  │  ├─ assets/fathi.bin       the FATHI point-cloud artwork, baked (scripts/build-fathi.mjs)
+│  │  ├─ fathiHead.ts           decodes the asset (points, weights, mask flag, strands)
+│  │  ├─ fathiMotion.ts         FATHI's motion controller: pose, gaze, blinks, brows, breath, nods, jaw
+│  │  └─ shaders.ts             FATHI's strands (neck flow, throat, shoulder links, jaw guide)
 │  ├─ lines.ts                  screen-space ribbon lines (constant pixel width, soft glow)
-│  └─ glsl.ts                   shared palette, helpers and the Avatar's pose
+│  └─ glsl.ts                   shared palette, helpers, FATHI's rig and the Avatar's colour
 ├─ voice/                       VoiceSurface, Waveform, Transcript, PresenceCaption, mic energy
 ├─ chrome/                      GlobalHeader, PresenceToggle, NavigationRail, AdaptiveDock
 ├─ background/                  AmbientBackground (night lake at ~5–10% intensity)
@@ -107,43 +107,39 @@ and each form plays every presence state in its own way:
 
 | State | Orb | Avatar |
 | --- | --- | --- |
-| listening | leans in, a ripple runs through, outer motes and orbits follow the voice | turns toward you and leans in; sound ripples inward from the ears |
-| thinking | violet joins, interior particles travel, inner streams appear | the silhouette thins, light gathers at the forehead and eyes |
-| speaking | light waves from the core to the surface, streams surge with speech | the jaw moves softly under the mask, light flows down the mask weave, small nods |
+| listening | leans in, a ripple runs through, outer motes and orbits follow the voice | the face brightens with your voice, steady focused gaze, "go on" nods |
+| thinking | violet joins, interior particles travel, inner streams appear | violet joins, the gaze drifts aside, brows lift, the head tilts in thought |
+| speaking | light waves from the core to the surface, streams surge with speech | the jaw moves under the mask, the mask glows with the voice, slow sway and emphasis nods |
 
-The head is a real 3D head scan (see the credit below), sampled into about
-42,000 particles (20,000 on phones). Density follows the surface area, plus
-the places a viewer reads first: the eyes, brow, nose bridge, cheekbones,
-ears, jaw and neck. Every particle is lit like a sculpture by a cool key
-light from the upper left, a violet rim light from behind, and a cyan edge
-at the silhouette. That lighting is what makes it read as 3D. The head sits
-in a gentle three-quarter turn and sways slightly, so its depth is always
-visible.
+The Avatar is FATHI: the original point-cloud artwork (about 53,700 drawn
+points with shallow depth, plus its neck, throat, shoulder and jaw strands),
+baked from the FATHI avatar export by `scripts/build-fathi.mjs`. Its rig and
+motion controller are ported with their tuning intact:
+- **Rig:** the jaw and mouth corners under the mask, blinks and squint,
+  brows, chest breathing, and head pose pivoting at the neck.
+- **Motion:** head poses and gaze that differ by state, blinks timed around
+  phrases, "go on" nods while listening, emphasis nods on speech onsets, and
+  a slow sway while talking.
+- **Gaze:** follows the pointer only while it moves.
+- **Jaw:** only speech output opens it. Microphone energy brightens the face
+  but never moves the mouth.
 
-On top of the particles:
-- **Mask:** a height field of the real face, dilated and smoothed so it
-  drapes like cloth over the nose and lips. It has a bright edge, a centre
-  seam, woven lines and straps to the ears.
-- **Contours:** horizontal slices across the skull and brow, like a 3D scan.
-- **Creases:** the sharp edges of the scan around the eyelids and ears.
-- **Strands:** slices around the vertical axis through the neck and
-  shoulders, so lines run down the neck and fan out over the shoulders.
-
-At rest the Avatar breathes, makes small head movements and shifts its gaze
-now and then.
+The colours follow the Orb's light rig: cyan where the light enters (lower
+left), electric blue across the body, violet gathering toward the upper
+right, and a white crown highlight. The mask is lilac instead of the original
+orange, and thinking adds violet, as it does in the Orb. Parallax is kept
+small because the artwork is a shallow relief.
 
 ### Credits
 
-Head model: "Lee Perry-Smith" head scan by
-[Infinite-Realities](https://www.ir-ltd.net), licensed
-[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), via the three.js
-examples. `scripts/build-head.mjs` converts it into
-`src/presence/avatar/assets/head.bin`.
+The FATHI artwork, rig and motion controller come from the FATHI avatar
+export (`fathi-avatar.js` and its geometry files) and remain under that
+project's ownership.
 
 ### Performance
 
-- One draw call for all 42,000 body particles (20,000 on phones), with all motion computed on the GPU.
-- The head cloud is built in a Web Worker after the Orb is already on screen.
+- One draw call for all 53,700 body particles (30,000 on phones), with all motion computed on the GPU.
+- The Avatar asset is decoded just after the Orb's first frames.
 - Orb-only layers stop drawing while the Avatar is shown.
 - `frameloop="demand"` redraws at 30 fps in calm states and 60 fps in active ones. Nothing is drawn while the tab is hidden.
 - Fewer particles at phone widths. `prefers-reduced-motion` slows time and switches off parallax.
