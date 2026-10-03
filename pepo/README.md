@@ -22,7 +22,7 @@ npm run build    # typecheck + production build into dist/
 | Click the mic, or press **Space** | Listen. A demo transcript plays, then PEPO understands, thinks and answers in whichever form is selected |
 | Press **/**, or click the keyboard icon | Type instead of talking |
 | Press **1–7**, or use the state label in the corner | Jump straight to a presence state for review |
-| **Orb / Avatar** toggle in the header, or press **A** | Choose which body PEPO wears (remembered per browser); switching plays the transformation |
+| **Orb / Avatar** toggle in the header, or press **A** | Choose which body PEPO wears (remembered per browser); switching cross-fades between them |
 | Move the pointer to the left edge | Reveal the navigation rail |
 
 When microphone access is granted, the Orb and the waveform react to your
