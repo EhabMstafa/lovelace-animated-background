@@ -12,9 +12,9 @@ const lightRig = /* glsl */ `
   vec3 rimLight(vec2 sn, float violet) {
     float ur = 0.5 + 0.5 * dot(sn, VIOLET_DIR2);
     float top = 0.5 + 0.5 * sn.y;
-    vec3 c = mix(mix(C_SKY, C_BLUE, 0.35), mix(C_BLUE, C_LILAC, 0.35), smoothstep(0.2, 0.7, ur));
-    c = mix(c, C_LILAC, smoothstep(0.6, 0.95, ur) * clamp(0.55 + violet * 0.6, 0.0, 1.0));
-    c = mix(c, C_WHITE, smoothstep(0.82, 1.0, top) * 0.45);
+    vec3 c = mix(C_CYAN, C_BLUE, smoothstep(0.15, 0.62, ur));
+    c = mix(c, C_LILAC, smoothstep(0.55, 0.95, ur) * clamp(0.55 + violet * 0.6, 0.0, 1.0));
+    c = mix(c, C_WHITE, smoothstep(0.82, 1.0, top) * 0.55);
     return c;
   }
 `
@@ -58,15 +58,15 @@ export const skinFragment = /* glsl */ `
     float facing = clamp(vNormal.z, 0.0, 1.0);
     vec2 sn = normalize(vNormal.xy + 1e-5);
     float edge = 1.0 - facing;
-    float rimSoft = pow(edge, 4.0);
-    float rimHard = pow(edge, 22.0);
+    float rimSoft = pow(edge, 3.2);
+    float rimHard = pow(edge, 14.0);
 
     vec3 rim = rimLight(sn, uViolet);
     // The glass: dark at the heart, blue light gathering towards the rim.
     // A filled, luminous glass body: deep at the heart, bright blue toward the rim.
-    vec3 body = mix(C_DEEP, C_BLUE, 0.3) * (0.02 + 0.42 * pow(edge, 2.2)) * (1.0 + 0.5 * uDepth);
-    float inner = smoothstep(0.1, 1.0, dot(sn, normalize(vec2(-0.62, -0.78)))) * pow(edge, 1.8);
-    body += C_SKY * inner * 0.16;
+    vec3 body = mix(C_DEEP, C_BLUE, 0.35) * (0.07 + 0.5 * pow(edge, 1.4)) * (1.0 + 0.5 * uDepth);
+    float inner = smoothstep(0.1, 1.0, dot(sn, normalize(vec2(-0.62, -0.78)))) * pow(edge, 0.9);
+    body += C_SKY * inner * 0.32;
     body += C_VIOLET * 0.1 * uViolet * smoothstep(0.3, 1.0, dot(sn, VIOLET_DIR2)) * edge;
     // A slow nebula drifting inside the glass.
     float neb = fbm(vPos * 2.2 + vec3(0.0, uTime * 0.025, uTime * 0.015));
@@ -74,7 +74,7 @@ export const skinFragment = /* glsl */ `
     vec3 nebCol = mix(C_BLUE, C_VIOLET, clamp(0.25 + uViolet * 0.8 + 0.3 * dot(sn, VIOLET_DIR2), 0.0, 1.0));
     body += nebCol * neb * (0.32 + 0.14 * uDepth);
     // Glass thickness: a soft inner band just inside the rim.
-    float band = smoothstep(0.55, 0.93, edge) * (1.0 - pow(edge, 22.0));
+    float band = pow(edge, 5.0) * (1.0 - pow(edge, 14.0));
     // The point where the Orb meets the horizon catches the most light.
     float contact = smoothstep(0.86, 1.0, -sn.y) * rimHard;
 
@@ -83,9 +83,9 @@ export const skinFragment = /* glsl */ `
     vec3 R = reflect(vec3(0.0, 0.0, -1.0), normalize(vNormal));
     float key = max(dot(R, normalize(vec3(-0.62, 0.74, 0.25))), 0.0);
     float glint = max(dot(R, normalize(vec3(0.95, 0.22, 0.2))), 0.0);
-    vec3 reflections = C_WHITE * pow(key, 220.0) * 0.4 + C_SKY * pow(key, 6.0) * 0.06 + C_LILAC * pow(glint, 160.0) * 0.25;
+    vec3 reflections = C_WHITE * pow(key, 160.0) * 0.7 + C_SKY * pow(key, 6.0) * 0.08 + C_LILAC * pow(glint, 120.0) * 0.4;
 
-    vec3 col = body + rim * (rimSoft * 0.35 + band * 0.32 + rimHard * 0.75) + C_WHITE * contact * 0.15 + reflections;
+    vec3 col = body + rim * (rimSoft * 0.7 + band * 0.45 + rimHard * 1.2) + C_WHITE * contact * 0.35 + reflections;
     col += mix(C_CYAN, C_WHITE, 0.4) * pow(facing, 5.0) * uSpeak * 0.18;
     // Alpha lets the glass hold back the landscape behind it, and lets go
     // completely when PEPO wears its face.
@@ -122,12 +122,12 @@ export const glowFragment = /* glsl */ `
     vec3 c = rimLight(sn, uViolet);
     vec3 deep = mix(C_DEEP, C_BLUE, 0.3);
     float orb = uFade;
-    float a = bloom * 0.16 * orb + halo * 0.16 * orb + wide * (0.12 + 0.12 * orb);
+    float a = bloom * 0.45 * orb + halo * 0.32 * orb + wide * (0.12 + 0.16 * orb);
     vec3 col = mix(deep, c, clamp(bloom + halo * 0.6, 0.0, 1.0) * orb);
     // Contact flare under the Orb.
     float flare = exp(-pow(p.x / (r * 0.42), 2.0) - pow((p.y + r * 1.01) / (r * 0.045), 2.0));
-    col += C_WHITE * flare * 0.3 * orb;
-    a += flare * 0.18 * orb;
+    col += C_WHITE * flare * 0.7 * orb;
+    a += flare * 0.4 * orb;
     a *= smoothstep(1.0, 0.7, d) * (uGlow + uSpeak * 0.25);
     gl_FragColor = vec4(col, a);
   }
@@ -148,7 +148,7 @@ export const streamFragment = /* glsl */ `
   varying float vDepth;
   varying vec2 vView;
   void main() {
-    float ends = smoothstep(0.0, 0.2, vT) * smoothstep(1.0, 0.8, vT);
+    float ends = smoothstep(0.0, 0.18, vT) * smoothstep(1.0, 0.7, vT);
     float bands = 0.35 + 0.65 * pow(0.5 + 0.5 * sin(vT * (5.0 + fract(vId * 0.73) * 6.0) + vId * 2.1), 2.0);
     float speed = 0.05 + fract(vId * 0.618) * 0.06;
     float head = fract(uTime * speed + vId * 0.37);
@@ -157,13 +157,11 @@ export const streamFragment = /* glsl */ `
 
     vec2 dir = normalize(vView + 1e-4);
     float ur = 0.5 + 0.5 * dot(dir, VIOLET_DIR2);
-    vec3 c = mix(C_SKY, C_BLUE, smoothstep(0.25, 0.6, ur));
+    vec3 c = mix(C_CYAN, C_SKY, smoothstep(0.25, 0.6, ur));
     c = mix(c, C_LILAC, smoothstep(0.62, 0.95, ur) * clamp(0.5 + uViolet, 0.0, 1.0));
-    c = mix(c, C_WHITE, 0.12 + pulse * 0.55);
+    c = mix(c, C_WHITE, 0.15 + pulse * 0.5);
 
-    // Not every line is equally lit: a few carry light, most stay faint.
-    float gain = 0.3 + 0.7 * pow(fract(vId * 0.618 + 0.31), 1.6);
-    float a = (uAlpha * bands * gain + pulse * uPulse) * ends * mix(1.0, 0.26, behind);
+    float a = (uAlpha * bands + pulse * uPulse) * ends * mix(1.0, 0.26, behind);
     gl_FragColor = vec4(c, a * ribbonProfile(vSide) * uFade);
   }
 `

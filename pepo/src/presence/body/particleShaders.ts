@@ -86,7 +86,7 @@ export const bodyVertex = /* glsl */ `
     color = mix(color, C_WHITE, sparkle * 0.55);
 
     alpha =
-        shell * (0.2 + 0.22 * pow(fres, 3.0)) * mix(0.28, 1.0, step(0.0, facing))
+        shell * (0.22 + 0.42 * pow(fres, 3.0)) * mix(0.28, 1.0, step(0.0, facing))
       + inner * (0.14 + 0.55 * uDepth) * (0.4 + 0.6 * aSeed.z)
       + halo * (0.1 + 0.3 * uListen * uEnergy) * (0.35 + 0.65 * aSeed.x);
     alpha *= 0.72 + 0.28 * sin(t * (0.5 + aSeed.z * 1.3) + aSeed.x * 40.0);

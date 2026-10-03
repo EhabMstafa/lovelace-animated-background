@@ -11,8 +11,7 @@ import { createRibbonGeometry, ribbonVertex } from './lines'
 import {
   assignFaceTargets,
   createOrbParticles,
-  createFieldLines,
-  createLineNodes,
+  createStarNodes,
   createStreams,
   ellipsePoints,
   type ParticleCounts,
@@ -86,7 +85,6 @@ const additive = (params: THREE.ShaderMaterialParameters) =>
 export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBodyProps) {
   const root = useRef<THREE.Group>(null)
   const spinGroup = useRef<THREE.Group>(null)
-  const fieldGroup = useRef<THREE.Group>(null)
   const orbitRefs = useRef<(THREE.Group | null)[]>([])
   const orbitNodeRefs = useRef<(THREE.Object3D | null)[]>([])
   /** Layers that exist only in the Orb; hidden (not drawn) in the Avatar. */
@@ -106,11 +104,10 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
 
   // ── Geometry ──
   const particleGeo = useMemo(() => createOrbParticles(counts), [counts])
-  const fieldLines = useMemo(() => createFieldLines(12, 11), [])
-  const streamGeo = useMemo(() => createRibbonGeometry(fieldLines), [fieldLines])
+  const streamGeo = useMemo(() => createRibbonGeometry(createStreams(3, 6, 11, 0.86, 0.98)), [])
   const innerStreamGeo = useMemo(() => createRibbonGeometry(createStreams(2, 4, 23, 0.5, 0.7, 90)), [])
   const orbitGeos = useMemo(() => ORBITS.map((o) => createRibbonGeometry([ellipsePoints(o.r[0], o.r[1])], true)), [])
-  const starGeo = useMemo(() => createLineNodes(fieldLines, 12, 5), [fieldLines])
+  const starGeo = useMemo(() => createStarNodes(14, 5), [])
   const nodeGeo = useMemo(() => {
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3))
@@ -218,7 +215,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
         uFade: fade,
       },
     })
-  const streamMat = useMemo(() => makeStreamMat(0.3, 5.5), [pixelRatio])
+  const streamMat = useMemo(() => makeStreamMat(0.3, 16), [pixelRatio])
   const innerStreamMat = useMemo(() => makeStreamMat(0, 3.5), [pixelRatio])
 
   const orbitMats = useMemo(
@@ -255,7 +252,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
         uTint: { value: new THREE.Color(tint) },
       },
     })
-  const starMat = useMemo(() => makeStarMat(30, '#7FD4FF'), [pixelRatio])
+  const starMat = useMemo(() => makeStarMat(40, '#4BC8FF'), [pixelRatio])
   const nodeMats = useMemo(() => ORBITS.map((o) => makeStarMat(26, o.tint)), [pixelRatio])
 
   const skinMat = useMemo(
@@ -390,14 +387,13 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     u.uEnergy.value = c.energy
     u.uGlow.value = p.glow
 
-    if (fieldGroup.current) fieldGroup.current.scale.setScalar(p.scale * (1 + m * 0.25))
     if (spinGroup.current) {
       spinGroup.current.rotation.y = c.rot
         spinGroup.current.scale.setScalar(p.scale * (1 + m * 0.25))
     }
 
     streamMat.uniforms.uTime.value = c.t
-    streamMat.uniforms.uAlpha.value = (0.42 + p.organize * 0.25) * p.glow
+    streamMat.uniforms.uAlpha.value = (0.95 + p.organize * 0.25) * p.glow
     // The Orb's own voice: streams surge with speech, orbits brighten while listening.
     streamMat.uniforms.uPulse.value = 0.35 + p.organize * 0.5 + p.activity * 0.3 + p.speak * c.energy * 0.9 + p.listen * c.energy * 0.4
     streamMat.uniforms.uViolet.value = p.violet
@@ -463,10 +459,8 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
           <mesh material={skinMat} renderOrder={1}>
             <sphereGeometry args={[RADIUS * 0.995, 72, 54]} />
           </mesh>
-          <mesh geometry={innerStreamGeo} material={innerStreamMat} renderOrder={2} frustumCulled={false} />
-        </group>
-        <group ref={fieldGroup}>
           <mesh geometry={streamGeo} material={streamMat} renderOrder={2} frustumCulled={false} />
+          <mesh geometry={innerStreamGeo} material={innerStreamMat} renderOrder={2} frustumCulled={false} />
           <points geometry={starGeo} material={starMat} renderOrder={5} />
         </group>
       </group>

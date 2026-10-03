@@ -149,52 +149,6 @@ export function createStreams(bands: number, perBand: number, seed: number, rMin
   return lines
 }
 
-/**
- * Field lines, as in the reference: thin, evenly spaced lines that cross the
- * whole visible face of the sphere in parallel, gently S-shaped curves around
- * one tilted axis. They stay fixed relative to the viewer, so the pattern is
- * always orderly; light travels along them instead.
- */
-export function createFieldLines(count: number, seed: number, radius = 0.972, segments = 140) {
-  const rand = mulberry32(seed)
-  const axis = new THREE.Vector3(0.5, 1, 0.12).normalize()
-  const frame = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis)
-  const lines: THREE.Vector3[][] = []
-  for (let i = 0; i < count; i++) {
-    const lat0 = -0.95 + (1.9 * (i + 0.5)) / count
-    const span = 1.75 + rand() * 0.25
-    const shift = (rand() - 0.5) * 0.3
-    const line: THREE.Vector3[] = []
-    for (let s = 0; s <= segments; s++) {
-      const u = s / segments
-      const lon = shift + (u - 0.5) * 2 * span
-      const lat = lat0 + Math.sin(u * Math.PI * 2 + i * 0.6) * 0.07
-      const p = new THREE.Vector3(Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon))
-      line.push(p.multiplyScalar(radius).applyQuaternion(frame))
-    }
-    lines.push(line)
-  }
-  return lines
-}
-
-/** Star nodes that sit on the field lines, like junctions in a network. */
-export function createLineNodes(lines: THREE.Vector3[][], count: number, seed: number) {
-  const rand = mulberry32(seed)
-  const pos = new Float32Array(count * 3)
-  const s = new Float32Array(count)
-  for (let i = 0; i < count; i++) {
-    const line = lines[Math.floor(rand() * lines.length)]
-    const p = line[Math.floor((0.25 + rand() * 0.5) * (line.length - 1))]
-    pos.set([p.x, p.y, p.z], i * 3)
-    s[i] = rand()
-  }
-  const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
-  geo.setAttribute('aSeed', new THREE.BufferAttribute(s, 1))
-  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 2)
-  return geo
-}
-
 /** A closed ellipse in the XY plane, as a point list. */
 export function ellipsePoints(rx: number, ry: number, segments = 200) {
   const pts: THREE.Vector3[] = []
