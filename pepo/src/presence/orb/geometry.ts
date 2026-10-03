@@ -23,19 +23,23 @@ export interface ParticleCounts {
   shell: number
   inner: number
   halo: number
+  /** Total particles, including latent ones that only appear in the Avatar. */
+  total: number
 }
 
-export const PARTICLE_KIND = { shell: 0, inner: 1, halo: 2 } as const
+export const PARTICLE_KIND = { shell: 0, inner: 1, halo: 2, latent: 3 } as const
 
 /**
- * One geometry, three populations distinguished by `aKind`:
- *  - shell: the sphere's skin, where most of the light lives
- *  - inner: sparse depth particles, revealed while thinking
- *  - halo:  a few drifting motes outside, which react to the voice
+ * One geometry, four populations distinguished by `aKind`:
+ *  - shell:  the sphere's skin, where most of the light lives
+ *  - inner:  sparse depth particles, revealed while thinking
+ *  - halo:   a few drifting motes outside, which react to the voice
+ *  - latent: invisible in the Orb; they wake up to help draw the face
+ * Avatar targets (`aFace`…) are filled in later by `assignFaceTargets`.
  */
 export function createOrbParticles(counts: ParticleCounts, seed = 7) {
   const rand = mulberry32(seed)
-  const total = counts.shell + counts.inner + counts.halo
+  const total = Math.max(counts.total, counts.shell + counts.inner + counts.halo)
   const position = new Float32Array(total * 3)
   const seeds = new Float32Array(total * 4)
   const kind = new Float32Array(total)
@@ -59,82 +63,119 @@ export function createOrbParticles(counts: ParticleCounts, seed = 7) {
     const g = (rand() + rand() + rand() - 1.5) / 1.5
     push(PARTICLE_KIND.shell, 1 + g * 0.018)
   }
-  for (let n = 0; n < counts.inner; n++) {
-    push(PARTICLE_KIND.inner, 0.12 + 0.8 * Math.pow(rand(), 0.7))
-  }
-  for (let n = 0; n < counts.halo; n++) {
-    push(PARTICLE_KIND.halo, 1.12 + Math.pow(rand(), 2.2) * 0.95)
-  }
+  for (let n = 0; n < counts.inner; n++) push(PARTICLE_KIND.inner, 0.12 + 0.8 * Math.pow(rand(), 0.7))
+  for (let n = 0; n < counts.halo; n++) push(PARTICLE_KIND.halo, 1.12 + Math.pow(rand(), 2.2) * 0.95)
+  while (i < total) push(PARTICLE_KIND.latent, 0.3 + 0.7 * Math.pow(rand(), 0.4))
 
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.BufferAttribute(position, 3))
   geo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 4))
   geo.setAttribute('aKind', new THREE.BufferAttribute(kind, 1))
   geo.setAttribute('aAxis', new THREE.BufferAttribute(axis, 3))
-  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 2.4)
+  geo.setAttribute('aFace', new THREE.BufferAttribute(new Float32Array(total * 3), 3))
+  geo.setAttribute('aFaceN', new THREE.BufferAttribute(new Float32Array(total * 3), 3))
+  geo.setAttribute('aFaceKind', new THREE.BufferAttribute(new Float32Array(total), 1))
+  geo.setAttribute('aFaceW', new THREE.BufferAttribute(new Float32Array(total), 1))
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 3)
   return geo
 }
 
+export interface FaceData {
+  position: Float32Array
+  normal: Float32Array
+  kind: Float32Array
+  weight: Float32Array
+}
+
 /**
- * Light filaments: gently bent arcs hugging a sphere of radius `radius`.
- * Each vertex carries its parametric position `aT` and the curve id `aId`
- * so the shader can run energy pulses along them.
+ * Pair every Orb particle with a point on the face. Both sets are ordered
+ * by height, so particles at the top of the Orb become the crown and those
+ * at the bottom become the shoulders: the flow between forms reads as one
+ * coherent movement instead of a shuffle.
  */
-export function createFilaments(count: number, radius: number, seed: number, segments = 72) {
+export function assignFaceTargets(geo: THREE.BufferGeometry, face: FaceData) {
+  const orbPos = geo.getAttribute('position') as THREE.BufferAttribute
+  const seeds = geo.getAttribute('aSeed') as THREE.BufferAttribute
+  const n = orbPos.count
+  const m = face.position.length / 3
+  const orbOrder = Array.from({ length: n }, (_, i) => i).sort(
+    (a, b) => orbPos.getY(a) + seeds.getX(a) * 0.15 - (orbPos.getY(b) + seeds.getX(b) * 0.15),
+  )
+  const faceOrder = Array.from({ length: m }, (_, i) => i).sort((a, b) => face.position[a * 3 + 1] - face.position[b * 3 + 1])
+  const fp = geo.getAttribute('aFace') as THREE.BufferAttribute
+  const fn = geo.getAttribute('aFaceN') as THREE.BufferAttribute
+  const fk = geo.getAttribute('aFaceKind') as THREE.BufferAttribute
+  const fw = geo.getAttribute('aFaceW') as THREE.BufferAttribute
+  for (let r = 0; r < n; r++) {
+    const o = orbOrder[r]
+    const f = faceOrder[Math.min(m - 1, Math.floor((r / n) * m))]
+    fp.setXYZ(o, face.position[f * 3], face.position[f * 3 + 1], face.position[f * 3 + 2])
+    fn.setXYZ(o, face.normal[f * 3], face.normal[f * 3 + 1], face.normal[f * 3 + 2])
+    fk.setX(o, face.kind[f])
+    fw.setX(o, face.weight[f])
+  }
+  for (const a of [fp, fn, fk, fw]) a.needsUpdate = true
+}
+
+/**
+ * Light streams: long, gently bending arcs inside the glass, like field
+ * lines. Returned as point lists for ribbon geometry.
+ */
+export function createStreams(count: number, seed: number, rMin: number, rMax: number, segments = 90) {
   const rand = mulberry32(seed)
-  const verts: number[] = []
-  const ts: number[] = []
-  const ids: number[] = []
-  const indices: number[] = []
+  const lines: THREE.Vector3[][] = []
   const start = new THREE.Vector3()
   const axis = new THREE.Vector3()
-  const bend = new THREE.Vector3()
-  const p = new THREE.Vector3()
   const q = new THREE.Quaternion()
   const qb = new THREE.Quaternion()
-
   for (let c = 0; c < count; c++) {
     randomDir(rand, start)
     randomDir(rand, axis)
     axis.sub(start.clone().multiplyScalar(axis.dot(start))).normalize()
-    bend.copy(start)
-    const len = 0.9 + rand() * 1.5
-    const bendAmt = (rand() - 0.5) * 0.7
-    const wobble = rand() * 6.28
-    const base = verts.length / 3
+    const bendAxis = start.clone()
+    const len = 1.4 + rand() * 1.6
+    const bend = (rand() - 0.5) * 1.3
+    const r0 = rMin + rand() * (rMax - rMin)
+    const dip = rand() * 0.12
+    const line: THREE.Vector3[] = []
     for (let s = 0; s <= segments; s++) {
       const t = s / segments
       q.setFromAxisAngle(axis, t * len)
-      qb.setFromAxisAngle(bend, Math.sin(t * Math.PI) * bendAmt)
-      p.copy(start).applyQuaternion(q).applyQuaternion(qb)
-      p.multiplyScalar(radius * (1 + 0.015 * Math.sin(t * 9 + wobble)))
-      verts.push(p.x, p.y, p.z)
-      ts.push(t)
-      ids.push(c)
-      if (s > 0) indices.push(base + s - 1, base + s)
+      qb.setFromAxisAngle(bendAxis, Math.sin(t * Math.PI) * bend)
+      const p = start.clone().applyQuaternion(q).applyQuaternion(qb)
+      // Streams sink slightly into the glass mid-way, like light under a surface.
+      p.multiplyScalar(r0 * (1 - dip * Math.sin(t * Math.PI)))
+      line.push(p)
     }
+    lines.push(line)
   }
-
-  const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
-  geo.setAttribute('aT', new THREE.Float32BufferAttribute(ts, 1))
-  geo.setAttribute('aId', new THREE.Float32BufferAttribute(ids, 1))
-  geo.setIndex(indices)
-  return geo
+  return lines
 }
 
-/** A closed ellipse in the XY plane with a parametric `aT` attribute. */
-export function createEllipse(rx: number, ry: number, segments = 256) {
-  const verts = new Float32Array((segments + 1) * 3)
-  const ts = new Float32Array(segments + 1)
-  for (let s = 0; s <= segments; s++) {
-    const t = s / segments
-    const a = t * Math.PI * 2
-    verts.set([Math.cos(a) * rx, Math.sin(a) * ry, 0], s * 3)
-    ts[s] = t
+/** A closed ellipse in the XY plane, as a point list. */
+export function ellipsePoints(rx: number, ry: number, segments = 200) {
+  const pts: THREE.Vector3[] = []
+  for (let s = 0; s < segments; s++) {
+    const a = (s / segments) * Math.PI * 2
+    pts.push(new THREE.Vector3(Math.cos(a) * rx, Math.sin(a) * ry, 0))
+  }
+  return pts
+}
+
+/** Star nodes scattered on (and just under) the Orb's surface. */
+export function createStarNodes(count: number, seed: number) {
+  const rand = mulberry32(seed)
+  const pos = new Float32Array(count * 3)
+  const s = new Float32Array(count)
+  const v = new THREE.Vector3()
+  for (let i = 0; i < count; i++) {
+    randomDir(rand, v).multiplyScalar(0.9 + rand() * 0.1)
+    pos.set([v.x, v.y, v.z], i * 3)
+    s[i] = rand()
   }
   const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.BufferAttribute(verts, 3))
-  geo.setAttribute('aT', new THREE.BufferAttribute(ts, 1))
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+  geo.setAttribute('aSeed', new THREE.BufferAttribute(s, 1))
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 2)
   return geo
 }

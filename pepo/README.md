@@ -4,10 +4,9 @@ The visual layer for PEPO, a local-first, voice-first intelligent presence.
 It has no backend. The runtime drives it through a small presence store and
 an event bus.
 
-**Status: Scene 1 (Presence).** This covers the Orb, the minimal header, the
-hidden navigation rail, the adaptive dock and the voice command surface.
-Scene 2 (Orb ↔ point-cloud Avatar) and Scene 3 (spatial workspace windows)
-come after Scene 1 is reviewed.
+**Status:** Scene 1 (Presence) and the core of Scene 2 (Conversation) are in
+place: the Orb, the point-cloud Avatar and the Orb ↔ Avatar transition.
+Scene 3 (spatial workspace windows) is next.
 
 ```bash
 cd pepo
@@ -20,9 +19,10 @@ npm run build    # typecheck + production build into dist/
 
 | Input | Effect |
 | --- | --- |
-| Click the mic, or press **Space** | Listen. A demo transcript plays, then PEPO understands, thinks and speaks |
+| Click the mic, or press **Space** | Listen. A demo transcript plays; PEPO understands as the Orb, opens into its face to answer, then returns to the Orb |
 | Press **/**, or click the keyboard icon | Type instead of talking |
 | Press **1–7**, or use the state label in the corner | Jump straight to a presence state for review |
+| Press **A** | Switch between the Orb and the Avatar |
 | Move the pointer to the left edge | Reveal the navigation rail |
 
 When microphone access is granted, the Orb and the waveform react to your
@@ -39,11 +39,15 @@ src/
 │  └─ tokens.ts                 colours, durations, easing
 ├─ presence/
 │  ├─ PresenceLayer.tsx         R3F canvas (demand frameloop, paced by FrameGovernor)
-│  └─ orb/
-│     ├─ Orb.tsx                particles, glass skin, filaments, orbits, bloom
-│     ├─ stateParams.ts         the state language as continuous parameters
-│     ├─ shaders.ts             GLSL
-│     └─ geometry.ts            deterministic particle, filament and orbit geometry
+│  ├─ PresenceBody.tsx          the body: Orb light layers + shared particles + Avatar traces
+│  ├─ body/particleShaders.ts   one particle system, two arrangements (Orb / Avatar) and the morph
+│  ├─ orb/                      state language, geometry, glass/stream/orbit/star shaders
+│  ├─ avatar/
+│  │  ├─ headModel.ts           SDF-sculpted head + mask, sampled into a point cloud with traces
+│  │  ├─ headWorker.ts          builds the cloud off the main thread
+│  │  └─ shaders.ts             hairline traces (eyes, brows, ears, mask weave, neck strands)
+│  ├─ lines.ts                  screen-space ribbon lines (constant pixel width, soft glow)
+│  └─ glsl.ts                   shared palette, helpers and the Avatar's pose
 ├─ voice/                       VoiceSurface, Waveform, Transcript, PresenceCaption, mic energy
 ├─ chrome/                      GlobalHeader, NavigationRail, AdaptiveDock
 ├─ background/                  AmbientBackground (night lake at ~5–10% intensity)
@@ -86,9 +90,30 @@ transitions.
 - **working**: organised and active (in Scene 3 it will also stream particles toward tool windows)
 - **waiting**: calmer and dimmer than idle
 
+### Orb ↔ Avatar
+
+The Orb and the Avatar are the same particles. Each one stores a position
+in the Orb and a position on the face. The two sets are paired by height, so
+the top of the Orb becomes the crown and the bottom becomes the shoulders.
+During the 1.5 s transformation, each particle leaves on its own schedule,
+loosens into a swirl and condenses into the head. The glass, orbits and
+streams fade out, and then the face's traces draw themselves in along their
+length. Set `presence.update({ form: 'avatar' | 'orb' })` to trigger it.
+
+The head is sculpted procedurally as a signed distance field: cranium, face,
+jaw, brow, eye sockets, nose, ears, neck and shoulders, plus a separate mask
+shell. Nothing is loaded from asset files. Point density is weighted toward
+the eyes, nose bridge, cheeks, mask, jaw and neck, and fades toward the
+silhouette, where loose motes drift away. The Avatar has its own motion
+language: breathing, small head movements, occasional eye shifts, the sides
+of the face reacting while it listens, a soft wave down the mask while it
+speaks, and light gathering at the forehead while it thinks.
+
 ### Performance
 
-- One draw call per particle population, with all motion computed on the GPU.
+- One draw call for all 9,000 body particles (5,200 on phones), with all motion computed on the GPU.
+- The head cloud is built in a Web Worker after the Orb is already on screen.
+- Orb-only layers stop drawing while the Avatar is shown.
 - `frameloop="demand"` redraws at 30 fps in calm states and 60 fps in active ones. Nothing is drawn while the tab is hidden.
 - Fewer particles at phone widths. `prefers-reduced-motion` slows time and switches off parallax.
 - The background is static apart from CSS-variable parallax.
@@ -103,6 +128,6 @@ added:
 - The header mic indicator, which duplicated the command surface
 - The PEPO entry in the dock (the Orb *is* PEPO), plus Maps, Code and Images from the default dock (they appear only when relevant)
 - Permanent labels on the dock and rail (they show on hover only), and the "Listening" caption, which duplicated the command surface
-- The third orbit ring, and 30% of the waveform bars
+- 30% of the waveform bars
 
 Design references live in `docs/references/`.

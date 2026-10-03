@@ -29,6 +29,7 @@ export function DemoConductor() {
       cancelAnimationFrame(raf)
     }
     const set = (state: PresenceState, extra: Partial<Parameters<typeof presence.update>[0]> = {}) => {
+      // Any state change during a conversation keeps the current form unless told otherwise.
       const from = presence.getSnapshot().state
       presence.update({ state, ...extra })
       if (from !== state) pepoEvents.emit('presenceChange', { from, to: state })
@@ -52,15 +53,20 @@ export function DemoConductor() {
       raf = requestAnimationFrame(tick)
     }
 
+    // Conversation: understand as the Orb, then open into the face to talk.
+    // After a quiet while, the face dissolves back into the Orb.
     const respond = () => {
       set('understanding', { transcript: null })
       later(1100, () => {
-        set('thinking')
-        later(2200, () => {
+        set('thinking', { form: 'avatar' })
+        later(2400, () => {
           set('speaking', { caption: SAMPLE_REPLY })
-          speak(3600, () => {
+          speak(3800, () => {
             set('idle')
             later(4200, () => presence.update({ caption: null }))
+            later(9000, () => {
+              if (presence.getSnapshot().state === 'idle') presence.update({ form: 'orb' })
+            })
           })
         })
       })

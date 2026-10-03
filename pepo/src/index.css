@@ -67,77 +67,24 @@ button:focus-visible, input:focus-visible { outline: 1px solid rgba(75, 200, 255
 /* ───────── far plane: ambient environment ───────── */
 .ambient { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
 
-.ambient-sky {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 70% 55% at 50% 40%, rgba(16, 34, 72, 0.55) 0%, transparent 70%),
-    linear-gradient(180deg, var(--space-0) 0%, var(--space-1) 30%, var(--space-2) 62%, var(--space-1) 68%, var(--space-0) 100%);
-}
+.ambient-canvas { position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px); }
 
 .parallax-far {
   transform: translate3d(calc(var(--px) * -6px), calc(var(--py) * -3px), 0);
   transition: transform 1.8s var(--ease-out);
 }
 
-.ambient-stars { position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px); opacity: 0.85; }
-
-.ambient-horizon-glow {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: var(--horizon);
-  height: 30vh;
-  transform: translateY(-62%);
-  background:
-    radial-gradient(ellipse 34% 40% at 50% 62%, rgba(70, 120, 255, 0.07), transparent 70%),
-    radial-gradient(ellipse 70% 30% at 50% 66%, rgba(120, 90, 190, 0.06), transparent 75%);
-}
-
-.ambient-ridges {
-  position: absolute;
-  left: -2%;
-  width: 104%;
-  bottom: calc(100% - var(--horizon));
-  height: 26vh;
-  opacity: 0.9;
-}
-
-.ambient-lake {
-  position: absolute;
-  top: var(--horizon);
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(180deg, rgba(6, 13, 30, 0.55) 0%, var(--space-0) 75%);
-  box-shadow: 0 -1px 0 rgba(120, 170, 255, 0.045);
-  overflow: hidden;
-}
-
-.ambient-reflection {
-  position: absolute;
-  left: -2%;
-  width: 104%;
-  top: 0;
-  height: 26vh;
-  transform: scaleY(-1);
-  transform-origin: top;
-  opacity: 0.32;
-  -webkit-mask-image: linear-gradient(0deg, transparent 20%, #000 100%);
-  mask-image: linear-gradient(0deg, transparent 20%, #000 100%);
-}
-
 /* The Orb's light on the water. Tints with PEPO's mind. */
 .ambient-orb-reflection {
   position: absolute;
   left: 50%;
-  top: 0;
-  width: calc(var(--stage) * 0.2);
-  height: 28vh;
+  top: var(--horizon);
+  width: calc(var(--stage) * 0.24);
+  height: 30vh;
   transform: translateX(-50%);
   background:
-    radial-gradient(ellipse 50% 100% at 50% 0%, rgba(75, 170, 255, 0.16), transparent 70%),
-    repeating-linear-gradient(180deg, rgba(120, 200, 255, 0.06) 0 1px, transparent 1px 7px);
+    radial-gradient(ellipse 50% 100% at 50% 0%, rgba(110, 190, 255, 0.26), transparent 70%),
+    repeating-linear-gradient(180deg, rgba(150, 210, 255, 0.1) 0 1px, transparent 1px 6px);
   -webkit-mask-image: radial-gradient(ellipse 50% 100% at 50% 0%, #000 0%, transparent 75%);
   mask-image: radial-gradient(ellipse 50% 100% at 50% 0%, #000 0%, transparent 75%);
   filter: blur(1.5px);
@@ -157,7 +104,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid rgba(75, 200, 255
 .ambient-vignette {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse 85% 75% at 50% 42%, transparent 45%, rgba(2, 5, 12, 0.75) 100%);
+  background: radial-gradient(ellipse 85% 75% at 50% 42%, transparent 50%, rgba(2, 5, 12, 0.7) 100%);
 }
 
 /* ───────── mid plane: presence ───────── */
@@ -544,7 +491,6 @@ button:focus-visible, input:focus-visible { outline: 1px solid rgba(75, 200, 255
   .mic { width: 42px; height: 42px; }
   .command-idle, .command-listening { flex: 1; justify-content: space-between; }
   .caption p { font-size: 16px; }
-  .ambient-ridges, .ambient-reflection { height: 16vh; }
   .state-picker { top: 58px; bottom: auto; right: 14px; flex-direction: column-reverse; align-items: flex-end; }
 }
 
@@ -552,3 +498,4 @@ button:focus-visible, input:focus-visible { outline: 1px solid rgba(75, 200, 255
   .parallax-far { transition: none; transform: none; }
   .ambient-orb-reflection { animation: none; }
 }
+.state-picker-divider { height: 1px; margin: 4px 8px; background: rgba(155, 170, 195, 0.1); }
