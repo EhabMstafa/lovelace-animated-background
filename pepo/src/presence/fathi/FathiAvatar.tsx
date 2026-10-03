@@ -98,18 +98,25 @@ export function FathiAvatar({ visible, preload, state, reducedMotion, compact, o
     }
   }, [wanted])
 
-  // Run while shown, pause once faded out.
+  // Reduced motion keeps FATHI alive (breath, blinks, jaw) through PEPO's
+  // controller; FATHI's own setReduced would freeze it, so it isn't used.
+  useEffect(() => controller.current.setReduced(reducedMotion), [reducedMotion])
+
+  // Run while shown and the page is visible; pause once faded out or when the
+  // tab is hidden (FATHI paces itself with timers, which keep running in a
+  // background tab). On return it resumes from now, without replaying.
   useEffect(() => {
     const a = avatar.current
     if (!a || !ready) return
-    if (visible) {
-      a.setReduced(reducedMotion)
-      a.start()
-      return
+    if (!visible) {
+      const id = window.setTimeout(() => a.stop(), SWITCH_MS)
+      return () => window.clearTimeout(id)
     }
-    const id = window.setTimeout(() => a.stop(), SWITCH_MS)
-    return () => window.clearTimeout(id)
-  }, [visible, ready, reducedMotion])
+    const sync = () => (document.hidden ? a.stop() : a.start())
+    sync()
+    document.addEventListener('visibilitychange', sync)
+    return () => document.removeEventListener('visibilitychange', sync)
+  }, [visible, ready])
 
   // State (kept current even while hidden, so a switch shows the right
   // behaviour at once), and the voice level while listening or speaking. The
@@ -142,7 +149,7 @@ export function FathiAvatar({ visible, preload, state, reducedMotion, compact, o
     }
   }, [visible])
 
-  useEffect(() => controller.current.setScale(compact ? 0.75 : 1), [compact])
+  useEffect(() => controller.current.setScale(compact ? 0.68 : 0.9), [compact])
 
   // A surface PEPO opens: a brief glance toward it, then back to the user.
   useEffect(
@@ -182,7 +189,7 @@ export function FathiAvatar({ visible, preload, state, reducedMotion, compact, o
     let settle = 0
     const afterMove = () => {
       window.clearTimeout(settle)
-      settle = window.setTimeout(resize, 1200)
+      settle = window.setTimeout(resize, 900)
     }
     const offWorkspace = workspace.subscribe(afterMove)
     window.addEventListener('resize', afterMove)

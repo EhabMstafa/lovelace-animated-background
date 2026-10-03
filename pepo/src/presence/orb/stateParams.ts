@@ -33,7 +33,7 @@ export interface OrbParams {
 const base: OrbParams = {
   scale: 1,
   spin: 0.035,
-  breath: 0.014,
+  breath: 0.012,
   converge: 0,
   organize: 0,
   depth: 0.25,

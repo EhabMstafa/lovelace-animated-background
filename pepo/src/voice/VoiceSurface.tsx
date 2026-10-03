@@ -10,6 +10,29 @@ import { Waveform } from './Waveform'
 
 const BUSY = new Set(['understanding', 'thinking', 'speaking', 'working'])
 
+/** One quiet word for what PEPO is doing, so state never rests on colour or motion alone. */
+const WORD: Partial<Record<string, string>> = {
+  understanding: 'Thinking…',
+  thinking: 'Thinking…',
+  working: 'Working…',
+  speaking: 'Speaking',
+  waiting: 'Waiting',
+  success: 'Done',
+  error: "Couldn't finish",
+}
+/** The same, as a sentence for screen readers. */
+const SPOKEN: Partial<Record<string, string>> = {
+  listening: 'PEPO is listening.',
+  understanding: 'PEPO is thinking.',
+  thinking: 'PEPO is thinking.',
+  working: 'PEPO is working.',
+  speaking: 'PEPO is speaking.',
+  interrupted: 'PEPO stopped and is listening.',
+  waiting: 'PEPO is waiting.',
+  success: 'Done.',
+  error: "PEPO couldn't finish that.",
+}
+
 /**
  * The floating command surface under the Orb. Voice first; the keyboard
  * is one tap away but never the default.
@@ -89,6 +112,9 @@ export function VoiceSurface({ captureMic = true }: { captureMic?: boolean }) {
 
   return (
     <div className="voice-surface">
+      <span className="sr-only" role="status" aria-live="polite">
+        {SPOKEN[state] ?? ''}
+      </span>
       <Transcript text={transcript} />
 
       <motion.div
@@ -157,8 +183,8 @@ export function VoiceSurface({ captureMic = true }: { captureMic?: boolean }) {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <button className="command-label" onClick={toggleVoice} tabIndex={-1}>
-                Talk to PEPO
+              <button className={`command-label ${WORD[state] ? 'is-state' : ''}`} onClick={toggleVoice} tabIndex={-1}>
+                {WORD[state] ?? 'Talk to PEPO'}
               </button>
               <button className="icon-btn" aria-label="Type instead" onClick={() => setTyping(true)}>
                 <Keyboard size={15} strokeWidth={1.4} />

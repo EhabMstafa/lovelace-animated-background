@@ -132,7 +132,7 @@ export function FloatingWindow({
       transition={{
         opacity: { duration: minimized ? 0.26 : 0.28, delay: minimized ? 0 : delay },
         scale: { duration: minimized ? 0.3 : 0.32, ease: ease.out, delay: minimized ? 0 : delay },
-        default: instant ? { duration: 0 } : { duration: 0.5, ease: ease.out },
+        default: instant ? { duration: 0 } : { duration: 0.4, ease: ease.out },
       }}
       drag={!minimized}
       dragControls={drag}

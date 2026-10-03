@@ -24,7 +24,8 @@ npm test         # unit tests: workspace layout and store
 | --- | --- |
 | Click the mic, or press **Space** | Listen. A demo transcript plays, then PEPO understands, thinks and answers in whichever form is selected |
 | Press **/**, or click the keyboard icon | Type instead of talking |
-| Say or type "plan a trip to Norway", or press **W** | The work scene: PEPO steps aside and opens a map, notes and a terminal |
+| Say or type "plan a trip to Norway and compare places", or press **W** | The multi-tool scene: PEPO steps aside and opens a map, notes and a browser |
+| Say or type "open the terminal and check the service", or press **S** | The terminal becomes the primary surface; PEPO stays beside it and reports |
 | Click a tool in the dock | Opens that tool as a surface, brings it forward if it's open, or restores it if it was put away |
 | Drag a surface's header; drag its bottom-right corner | Move it; resize it. It stays where you put it (double-click the header to let PEPO arrange it again) |
 | **–** on a surface | Put it away in the dock (hollow dot); click the dock icon to restore it |
@@ -32,7 +33,7 @@ npm test         # unit tests: workspace layout and store
 | Click **Local** in the header | Status on demand: where PEPO runs, privacy, each service |
 | Press **Esc** (when not listening or typing) | Puts every surface away in the dock (nothing is closed); PEPO returns to the centre |
 | Click the mic while PEPO is speaking | Interrupts: speech stops, PEPO turns its attention to you and listens |
-| Press **1–9, 0, -**, or use the state label in the corner | Jump straight to a presence state for review |
+| **Shift+D** | Development panel (never shown otherwise): force any presence state (keys 1–9, 0, - while open), Avatar / Orb, Dark / Light |
 | **Orb / Avatar** toggle in the header, or press **A** | Choose which presentation PEPO uses (remembered per browser). A ~350 ms switch: one leaves, the other arrives; nothing else changes |
 | Sun / moon button in the header, or press **T** | Dark or light theme (remembered per browser; follows the system until chosen) |
 | Move the pointer to the left edge | Reveal the navigation rail. **Conversations** opens the history; **Home** puts the work away; **Workspace** brings it back |
@@ -204,7 +205,7 @@ transitions.
 - **error**: dimmer and slower; never an alarm
 
 On top of the state, `orbMotion.ts` adds the living parts with restraint:
-- **Breath:** a nearly imperceptible energy cycle (about 1.4% of the
+- **Breath:** a nearly imperceptible energy cycle (about 1.2% of the
   radius) whose length varies between 5 and 9 s.
 - **Voice:** microphone and speech levels pass a noise gate, are normalised
   and smoothed (slow attack, slower release). The Orb follows phrases, never
@@ -311,11 +312,31 @@ The FATHI artwork, renderer and motion controller come from the FATHI avatar
 export (`src/presence/fathi/`) and remain under that project's ownership.
 The vendored Three.js build keeps its MIT notice (`THIRD_PARTY_NOTICES.txt`).
 
+### Motion priority, reduced motion, accessibility
+
+- **Priority:** interruption > listening > speaking > thinking > working >
+  idle. Entering a state cancels lower-priority motion that was still
+  scheduled (an idle glance, a thinking look), and attention comes back
+  first.
+- **Reduced motion** (`prefers-reduced-motion`): the Avatar keeps breathing,
+  blinking and the jaw; head drift, glances, nods, posture changes and
+  gestures stop. The Orb slows down but keeps its state changes. Surfaces
+  and panels fade instead of moving.
+- **State in words, not only light:** the voice control says what PEPO is
+  doing (Thinking…, Working…, Speaking, Done, Waiting), and a live region
+  says it to screen readers.
+- Visible focus everywhere, keyboard reachable controls, touch targets of
+  about 40 px on touch screens, and muted text kept readable in both themes.
+- **Final passes:** ambient Orb motion and the Avatar's head motion run
+  about 10–12% quieter than first drafted; the reflection's shimmer is gone;
+  the background parallax and light streams are lighter; PEPO steps aside in
+  0.8 s and surfaces rearrange in 0.4 s.
+
 ### Performance
 
 - One draw call for the Orb's particles, with all motion computed on the GPU. Invisible particles skip rasterisation.
 - FATHI is loaded only when the Avatar is first chosen, and paces itself (its own 10–20 fps timer). The Orb's canvas pauses while FATHI is shown.
-- `frameloop="demand"` redraws at 30 fps in calm states and 60 fps in active ones. Nothing is drawn while the tab is hidden.
+- `frameloop="demand"` redraws at 60 fps, or 30 fps while PEPO is calm beside open surfaces. Nothing is drawn while the tab is hidden; FATHI (which paces itself with timers) is stopped too and resumes without replaying. Coming back from a pause, the Orb joins the current state at once.
 - Fewer Orb particles at phone widths. `prefers-reduced-motion` slows time and switches off parallax; FATHI holds still.
 - The background is static apart from CSS-variable parallax.
 - While surfaces are open, PEPO renders at up to 1.5× resolution and at

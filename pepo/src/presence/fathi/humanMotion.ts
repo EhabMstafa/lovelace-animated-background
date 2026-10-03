@@ -111,6 +111,17 @@ class Spring {
 interface Timed {
   at: number
   run: () => void
+  /** Priority of the state that scheduled it (see PRIORITY). */
+  rank: number
+}
+
+/**
+ * When behaviours conflict the higher one wins: interruption > listening >
+ * speaking > thinking > working > idle procedural motion. Entering a state
+ * cancels whatever lower-priority motion was still scheduled.
+ */
+const PRIORITY: Record<AvatarState, number> = {
+  interrupted: 6, listening: 5, attentive: 5, speaking: 4, thinking: 3, working: 2, idle: 1, waiting: 1, success: 1, error: 1,
 }
 
 /** A short one-shot curve added on top of a channel (nods, emphasis). */
@@ -141,7 +152,7 @@ export function createHumanMotion(rand: () => number = Math.random) {
   /** Once PEPO drives the presence directly, FATHI's coarse setState is ignored. */
   let driven = false
   const queue: Timed[] = []
-  const later = (delay: number, run: () => void) => queue.push({ at: time + delay, run })
+  const later = (delay: number, run: () => void) => queue.push({ at: time + delay, run, rank: PRIORITY[state] })
 
   // ── Breath: each cycle has its own length and depth ──
   let breathPhase = rand()
@@ -240,8 +251,8 @@ export function createHumanMotion(rand: () => number = Math.random) {
   /** Brief eyelid widening (surprise) or softening (empathy), on top of the state's squint. */
   let lidAccent = 0
   let lidAccentUntil = -10
-  /** Movement scale: smaller screens get a little less, so nothing looks exaggerated. */
-  let scale = 1
+  /** Movement scale: kept a little under full (quieter reads as more premium); less on small screens. */
+  let scale = 0.9
   /** Empathy: quieter movement for a while. */
   let calmUntil = -10
 
@@ -405,6 +416,16 @@ export function createHumanMotion(rand: () => number = Math.random) {
   const apply = (next: AvatarState) => {
     if (next === state) return
     const prev = state
+    // Motion priority: drop lower-priority motion still waiting to happen
+    // (an idle glance, a thinking look) and bring attention back first.
+    const rank = PRIORITY[next]
+    const before = queue.length
+    for (let i = queue.length - 1; i >= 0; i--) if (queue[i].rank < rank) queue.splice(i, 1)
+    if (queue.length < before) {
+      gazeBase = [0, 0]
+      headFollow = [0, 0]
+    }
+    for (const list of Object.values(pulses)) for (let i = list.length - 1; i >= 0; i--) if (list[i].start > time && rank >= 5) list.splice(i, 1)
     state = next
     stateSince = time
     enter(next, prev)
@@ -436,9 +457,12 @@ export function createHumanMotion(rand: () => number = Math.random) {
       pointer = [clamp(Number(x) || 0, -1, 1), clamp(Number(y) || 0, -1, 1)]
       pointerActive = !!active
     },
+    /**
+     * Reduced motion keeps PEPO alive: breathing, blinking and the jaw stay;
+     * head drift, glances, nods, posture changes and gestures stop.
+     */
     setReduced(v: boolean) {
       reduced = !!v
-      if (reduced) current = { ...REST }
     },
     blink() {
       if (reduced) return false
@@ -468,7 +492,6 @@ export function createHumanMotion(rand: () => number = Math.random) {
     step(dtIn: number): AvatarPose {
       const dt = clamp(Number.isFinite(dtIn) ? dtIn : 0, 0, 0.12)
       time += dt
-      if (reduced) return current
 
       // Scheduled reactions.
       for (let i = queue.length - 1; i >= 0; i--) {
@@ -499,7 +522,7 @@ export function createHumanMotion(rand: () => number = Math.random) {
       }
 
       // Gaze plans, by state. Mostly near the camera.
-      if (time >= gazeAt) {
+      if (time >= gazeAt && !reduced) {
         const r = rand()
         if (state === 'idle' || state === 'waiting') {
           if (r < 0.25) glanceAndReturn(sign() * range(0.15, 0.3), range(-0.15, 0.12), range(0.6, 2))
@@ -525,7 +548,7 @@ export function createHumanMotion(rand: () => number = Math.random) {
         }
       }
       // Micro-saccades: tiny, quick, irregular.
-      if (time >= microAt) {
+      if (time >= microAt && !reduced) {
         const scale = state === 'listening' || state === 'attentive' ? 0.6 : 1
         micro = [range(-0.035, 0.035) * scale, range(-0.025, 0.025) * scale]
         microAt = time + range(0.35, 1.5)
@@ -537,7 +560,7 @@ export function createHumanMotion(rand: () => number = Math.random) {
       const gy = gazeY.step(dt)
 
       // Posture: irregular, often no change at all.
-      if (time >= postureAt) {
+      if (time >= postureAt && !reduced) {
         const amp = { idle: 1, attentive: 0.4, listening: 0.45, thinking: 0.3, speaking: 0.6, interrupted: 0.3, working: 0.4, waiting: 0.8, success: 0.5, error: 0.4 }[state]
         const still = { idle: 0.3, attentive: 0.55, listening: 0.5, thinking: 0.6, speaking: 0.45, interrupted: 0.8, working: 0.55, waiting: 0.4, success: 0.6, error: 0.6 }[state]
         if (!chance(still)) {
@@ -552,7 +575,7 @@ export function createHumanMotion(rand: () => number = Math.random) {
       }
 
       // Listening: sparse silent acknowledgements.
-      if (state === 'listening' && time >= ackAt) {
+      if (state === 'listening' && time >= ackAt && !reduced) {
         if (!chance(0.3)) {
           const r = rand()
           if (r < 0.55) nod('micro')
@@ -593,7 +616,7 @@ export function createHumanMotion(rand: () => number = Math.random) {
       const jaw = clamp(jawEnv * syllable * 0.85, 0, 1)
 
       // Body.
-      if (time >= bodyAt) {
+      if (time >= bodyAt && !reduced) {
         swayX.target = range(-0.006, 0.006)
         swayR.target = range(-0.004, 0.004)
         bodyAt = time + range(6, 14)
@@ -633,7 +656,7 @@ export function createHumanMotion(rand: () => number = Math.random) {
       const yawNow = yaw.step(dt) + followYaw.step(dt)
       const moving = Math.abs(gazeX.v) + Math.abs(gazeY.v) > 0.08 || Math.abs(yaw.v) + Math.abs(pitch.v) + Math.abs(roll.v) > 0.004
       // Smaller screens and empathy both mean less movement.
-      const k = scale * (time < calmUntil ? 0.7 : 1)
+      const k = reduced ? 0 : scale * (time < calmUntil ? 0.7 : 1)
       const rollNow = roll.step(dt) + sum(pulses.roll)
       current = {
         yaw: yawNow * k,
@@ -650,7 +673,7 @@ export function createHumanMotion(rand: () => number = Math.random) {
         breath,
         // Neck and shoulders stay connected: the torso follows large head turns by a hair.
         body: [swayX.step(dt) + yawNow * k * 0.04, swayR.step(dt) + rollNow * k * 0.12],
-        gaze: [gx, gy],
+        gaze: reduced ? [0, 0] : [gx, gy],
         viseme: [jaw, jaw * 0.3 * (0.5 + 0.5 * Math.sin(time * 7.1)), jaw * 0.22 * (0.5 + 0.5 * Math.sin(time * 5.3 + 1))],
         bands: [0, 0, 0],
         speak: jawEnv,

@@ -75,7 +75,7 @@ export function LightStreams({ origin, targets }: { origin: { x: number; y: numb
         const flowing = t.active || burst
         if (flowing) {
           alive = true
-          const every = burst ? 60 : 150
+          const every = burst ? 75 : 190
           if (now - (lastSpawn.get(t.id) ?? 0) > every) {
             particles.push({ target: t.id, born: now, life: 900 + Math.random() * 500, offset: (Math.random() - 0.5) * 14 })
             lastSpawn.set(t.id, now)
@@ -87,7 +87,7 @@ export function LightStreams({ origin, targets }: { origin: { x: number; y: numb
           ctx.bezierCurveTo(c.c1.x, c.c1.y, c.c2.x, c.c2.y, c.p1.x, c.p1.y)
           const g = ctx.createLinearGradient(c.p0.x, c.p0.y, c.p1.x, c.p1.y)
           g.addColorStop(0, 'rgba(64,230,255,0.0)')
-          g.addColorStop(0.3, `rgba(${trail},${burst ? 0.18 : 0.1})`)
+          g.addColorStop(0.3, `rgba(${trail},${burst ? 0.15 : 0.085})`)
           g.addColorStop(1, `rgba(139,92,255,${burst ? 0.16 : 0.08})`)
           ctx.strokeStyle = g
           ctx.lineWidth = 1

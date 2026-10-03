@@ -136,6 +136,28 @@ const tasks: TasksData = {
   ],
 }
 
+/** The trip scenario: PEPO compares places in the browser while it plans. */
+export const TRIP_BROWSER: BrowserData = {
+  query: 'Bergen vs Ålesund vs Lofoten in late September',
+  results: [
+    {
+      title: 'Bergen · the gateway to the fjords',
+      url: 'https://en.visitbergen.com/',
+      snippet: 'Rail from Oslo, boats to the Sognefjord and Hardangerfjord. Wettest of the three: plan an indoor day.',
+    },
+    {
+      title: 'Ålesund · Art Nouveau town by the sea',
+      url: 'https://www.visitalesund.com/',
+      snippet: 'An hour from the Geirangerfjord. Quieter than Bergen in autumn, with the best viewpoint at Aksla.',
+    },
+    {
+      title: 'Lofoten · late season',
+      url: 'https://www.lofoten.info/',
+      snippet: 'Fewer visitors, first northern lights, shorter days. A car or local buses between Reine and Svolvær.',
+    },
+  ],
+}
+
 export const SAMPLE: Partial<Record<ToolKind, Record<string, unknown>>> = {
   browser: { ...browser },
   files: { ...files },

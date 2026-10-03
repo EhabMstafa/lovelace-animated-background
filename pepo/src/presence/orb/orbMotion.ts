@@ -58,7 +58,8 @@ export function createOrbMotion(rand: () => number = Math.random) {
 
       const gated = clamp01((level - NOISE_GATE) / (1 - NOISE_GATE))
       listen = follow(listen, state === 'listening' ? gated : 0, 0.25, 0.6, dt)
-      speak = follow(speak, state === 'speaking' ? gated : 0, 0.15, 0.5, dt)
+      // Interrupted: speaking energy resolves quickly, then listening takes over.
+      speak = follow(speak, state === 'speaking' ? gated : 0, 0.15, state === 'interrupted' ? 0.12 : 0.5, dt)
 
       const e = time - emphasisAt
       const emphasis = e >= 0 && e < 0.9 ? 0.1 * Math.sin((e / 0.9) * Math.PI) : 0

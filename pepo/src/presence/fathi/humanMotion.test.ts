@@ -123,4 +123,35 @@ describe('natural human motion (FATHI controller)', () => {
     for (let i = 0; i < 30; i++) jaw = Math.max(jaw, m.step(dt).jaw)
     expect(jaw).toBe(0)
   })
+
+  it('drops idle motion when the user starts talking (motion priority)', () => {
+    const m = createHumanMotion(mulberry32(9))
+    m.setPresence('idle')
+    m.gesture('lookLeft') // a glance away, with its return still scheduled
+    for (let i = 0; i < 20; i++) m.step(dt)
+    m.setPresence('listening')
+    let g: [number, number] = [1, 1]
+    for (let i = 0; i < 24; i++) g = m.step(dt).gaze // 400 ms
+    expect(Math.hypot(g[0], g[1])).toBeLessThan(0.15)
+  })
+
+  it('keeps breathing, blinking and the jaw under reduced motion, and nothing else', () => {
+    const m = createHumanMotion(mulberry32(10))
+    m.setReduced(true)
+    m.setPresence('speaking')
+    let maxHead = 0, breath = 0, blink = 0, jaw = 0
+    for (let i = 0; i < 60 * 30; i++) {
+      m.setAmplitude(i % 180 < 120 ? 0.7 : 0)
+      const p = m.step(dt)
+      maxHead = Math.max(maxHead, Math.abs(p.yaw) + Math.abs(p.pitch) + Math.abs(p.roll))
+      breath = Math.max(breath, Math.abs(p.breath))
+      blink = Math.max(blink, p.blink)
+      jaw = Math.max(jaw, p.jaw)
+    }
+    expect(maxHead).toBeLessThan(0.002)
+    expect(breath).toBeGreaterThan(0.003)
+    expect(blink).toBeGreaterThan(0.3)
+    expect(jaw).toBeGreaterThan(0.2)
+    expect(m.gesture('nod')).toBe(false)
+  })
 })

@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
+import { MotionConfig } from 'framer-motion'
 import { AmbientBackground } from '../background/AmbientBackground'
 import { AdaptiveDock } from '../chrome/AdaptiveDock'
 import { GlobalHeader } from '../chrome/GlobalHeader'
@@ -57,6 +58,8 @@ export function PEPOApp({ demo = true }: PEPOAppProps) {
   useParallaxVars()
 
   return (
+    // Framer Motion follows prefers-reduced-motion: movement becomes fades.
+    <MotionConfig reducedMotion="user">
     <div className="pepo" data-presence={state}>
       <AmbientBackground />
       <PresenceLayer compact={compact} />
@@ -78,5 +81,6 @@ export function PEPOApp({ demo = true }: PEPOAppProps) {
         </>
       )}
     </div>
+    </MotionConfig>
   )
 }

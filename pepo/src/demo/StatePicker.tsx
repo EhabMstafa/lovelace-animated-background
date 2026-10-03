@@ -1,37 +1,43 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { setPresenceForm } from '../chrome/PresenceToggle'
 import { PRESENCE_STATES, presence, usePresence, type PresenceState } from '../core/presence'
+import { theme, useTheme } from '../core/theme'
 
 const ENERGY_STATES = new Set<PresenceState>(['listening', 'speaking'])
+const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-']
 
 /**
- * DEMO ONLY: review tool for the presence language. Keys 1–9, 0 and - switch
- * states; the corner label reveals the list. (A, Orb/Avatar, lives in the header toggle.)
+ * DEVELOPMENT ONLY: a hidden test panel (Shift+D) to force any presence
+ * state, the presentation (Avatar / Orb) and the theme. Nothing of it shows
+ * in the normal interface; while it is open, keys 1–9, 0 and - pick states.
  */
-const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-']
 export function StatePicker() {
-  const { state } = usePresence()
+  const { state, form } = usePresence()
+  const current = useTheme()
   const [open, setOpen] = useState(false)
 
-  const pick = (s: PresenceState) => {
-    presence.update({ state: s, caption: null, transcript: null })
-  }
-
+  const pick = (s: PresenceState) => presence.update({ state: s, caption: null, transcript: null })
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
       if (t.tagName === 'INPUT' || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+        setOpen((o) => !o)
+        return
+      }
+      if (!open) return
       const i = KEYS.indexOf(e.key)
       if (i >= 0 && i < PRESENCE_STATES.length) pick(PRESENCE_STATES[i])
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [open])
 
-  // States that react to energy get a synthetic signal when picked manually.
+  // States that react to energy get a synthetic signal when picked here.
   useEffect(() => {
-    if (!ENERGY_STATES.has(state) || state === 'listening') return
+    if (!open || !ENERGY_STATES.has(state) || state === 'listening') return
     let raf = 0
     const start = performance.now()
     const tick = (now: number) => {
@@ -45,19 +51,22 @@ export function StatePicker() {
       cancelAnimationFrame(raf)
       presence.setEnergy(0)
     }
-  }, [state])
+  }, [state, open])
 
   return (
-    <div className="state-picker">
-      <AnimatePresence>
-        {open && (
-          <motion.ul
-            className="surface"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: 0.2 }}
-          >
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="dev-panel surface"
+          role="dialog"
+          aria-label="Development controls"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 4 }}
+          transition={{ duration: 0.18 }}
+        >
+          <p className="dev-title">Dev · Shift+D</p>
+          <ul>
             {PRESENCE_STATES.map((s, i) => (
               <li key={s}>
                 <button className={s === state ? 'is-active' : ''} onClick={() => pick(s)}>
@@ -66,12 +75,23 @@ export function StatePicker() {
                 </button>
               </li>
             ))}
-          </motion.ul>
-        )}
-      </AnimatePresence>
-      <button className="state-picker-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label="Presence states (demo)">
-        <span>{state}</span>
-      </button>
-    </div>
+          </ul>
+          <div className="dev-row">
+            {(['avatar', 'orb'] as const).map((f) => (
+              <button key={f} className={form === f ? 'is-active' : ''} onClick={() => setPresenceForm(f)}>
+                {f}
+              </button>
+            ))}
+          </div>
+          <div className="dev-row">
+            {(['dark', 'light'] as const).map((t) => (
+              <button key={t} className={current === t ? 'is-active' : ''} onClick={() => theme.set(t)}>
+                {t}
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

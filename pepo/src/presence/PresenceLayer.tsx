@@ -52,7 +52,8 @@ export function PresenceLayer({ compact = false }: { compact?: boolean }) {
   // With the Avatar shown, the Orb's canvas has nothing to draw and pauses.
   const busy = useWorkspace().length > 0
   const calm = CALM_STATES.has(state) || state === 'working'
-  const fps = avatar && !transforming ? 0 : reducedMotion ? 24 : transforming || !calm ? 60 : 30
+  // 60 fps by default; 30 only while PEPO is calm beside open surfaces.
+  const fps = avatar && !transforming ? 0 : reducedMotion ? 24 : busy && calm && !transforming ? 30 : 60
   const maxDpr = busy ? 1.5 : 2
 
   // If the graphics context is lost (driver reset, GPU memory pressure) and the

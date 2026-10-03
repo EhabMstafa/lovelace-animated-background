@@ -4,7 +4,7 @@ import { pepoEvents, type PEPOEventMap } from '../core/events'
 import { presence, type PresenceState } from '../core/presence'
 import { systemStatus } from '../core/status'
 import { workspace, type ToolKind } from '../core/workspace'
-import { SAMPLE } from './sampleContent'
+import { SAMPLE, TRIP_BROWSER } from './sampleContent'
 
 /**
  * DEMO ONLY: a stand-in for PEPO's runtime so the visual layer can be
@@ -13,10 +13,22 @@ import { SAMPLE } from './sampleContent'
  * and drives `presence` itself.
  */
 
-const SAMPLE_UTTERANCE = 'Plan a seven day trip to Norway with the fjords and Lofoten'
+const SAMPLE_UTTERANCE = 'Plan a trip to Norway and compare places'
 const SAMPLE_REPLY = 'I found three new results. Want me to keep going?'
 const TASK_REPLY = "Here's a seven-day route through the fjords. Want me to book the trains?"
-const TASK_PATTERN = /norway|trip|travel|plan|route|fjord/i
+const TASK_PATTERN = /norway|trip|travel|plan|route|fjord|compare/i
+/** Scenario 3: "Open the terminal and check the service." */
+const SERVICE_PATTERN = /terminal|service|server|status|logs?\b/i
+const SERVICE_LINES = [
+  '$ systemctl status pepo-voice',
+  '● pepo-voice.service — PEPO speech pipeline',
+  '  Active: active (running) since 14:58 · 2h 3min ago',
+  '$ journalctl -u pepo-voice --since "1 hour ago" --priority warning',
+  '-- No entries --',
+  '$ curl -s localhost:7860/health',
+  '✓ healthy · stt 38 ms · tts 112 ms',
+]
+const SERVICE_REPLY = 'The voice service is running. No warnings in the last hour.'
 
 const ITINERARY = [
   'Day 1 — Oslo · Opera House, Bygdøy, evening on Aker Brygge',
@@ -26,16 +38,6 @@ const ITINERARY = [
   'Day 5 — Drive to Geiranger via Strynefjellet, fjord viewpoints',
   'Day 6 — Ålesund · Art Nouveau town, Aksla at sunset',
   'Day 7 — Fly to Bodø, ferry to Lofoten · Reine, Hamnøy',
-]
-const TERMINAL = [
-  '$ trains search --from Oslo --to Myrdal --date +1d',
-  'Bergen Line 08:25 → 13:05 · 3 seats left',
-  '$ ferry schedule nærøyfjord --day 3',
-  'Flåm 09:00 → Gudvangen 11:00',
-  '$ weather forecast bergen geiranger lofoten',
-  'Bergen 12° rain · Geiranger 14° clear · Lofoten 9° wind',
-  '$ route optimise --stops 7 --mode rail,ferry,road',
-  '✓ 1,890 km · 7 days · 3 transfers',
 ]
 
 const TITLES: Record<ToolKind, string> = {
@@ -112,8 +114,8 @@ export function DemoConductor() {
       later(1000, () => {
         set('thinking')
         later(1400, () => {
-          set('working', { caption: 'Working…' })
-          conversation.add('tool', 'Opened Map, Notes and Terminal for the Norway route')
+          set('working', { caption: 'Planning the route…' })
+          conversation.add('tool', 'Opened Map, Notes and Browser for the Norway route')
           // A tool the viewer already opened is reused: give it this task's title and content.
           const map = workspace.open('map', 'Norway · route', { progress: 0 })
           workspace.update(map, { title: 'Norway · route', active: true, data: { progress: 0 } })
@@ -139,17 +141,14 @@ export function DemoConductor() {
             )
           })
 
+          // The browser comes in as context: comparing the places on the route.
           later(1700, () => {
-            const term = workspace.open('terminal', 'Terminal', { lines: [] })
-            workspace.update(term, { active: true, data: { lines: [] } })
-            TERMINAL.forEach((line, i) =>
-              later(300 + i * 480 + (line.startsWith('$') ? 0 : 160), () => {
-                const w = workspace.find('terminal')
-                if (!w) return
-                workspace.update(w.id, { data: { lines: [...((w.data.lines as string[]) ?? []), line] } })
-                if (i === TERMINAL.length - 1) workspace.update(w.id, { active: false })
-              }),
-            )
+            const web = workspace.open('browser', 'Browser', { query: TRIP_BROWSER.query, loading: true, results: [] })
+            workspace.update(web, { active: true, data: { query: TRIP_BROWSER.query, loading: true, results: [], view: null } })
+            later(1400, () => {
+              const w = workspace.find('browser')
+              if (w) workspace.update(w.id, { active: false, data: { ...TRIP_BROWSER, loading: false } })
+            })
           })
 
           later(6900, () => {
@@ -172,6 +171,40 @@ export function DemoConductor() {
         })
       })
     }
+
+    /**
+     * Scenario 3: the terminal becomes the primary object; PEPO stays
+     * visible beside it and says what it found.
+     */
+    const runServiceCheck = () => {
+      set('understanding', { transcript: null })
+      later(800, () => {
+        set('working', { caption: 'Checking the service…' })
+        conversation.add('tool', 'Opened Terminal')
+        const term = workspace.open('terminal', 'Terminal', { lines: [] })
+        workspace.update(term, { active: true, data: { lines: [] } })
+        SERVICE_LINES.forEach((line, i) =>
+          later(500 + i * 520 + (line.startsWith('$') ? 0 : 180), () => {
+            const w = workspace.find('terminal')
+            if (!w) return
+            workspace.update(w.id, { data: { lines: [...((w.data.lines as string[]) ?? []), line] } })
+            if (i === SERVICE_LINES.length - 1) workspace.update(w.id, { active: false })
+          }),
+        )
+        later(500 + SERVICE_LINES.length * 520 + 600, () => {
+          set('speaking')
+          say(SERVICE_REPLY)
+          later(520, () =>
+            speak(3600, () => {
+              set('success')
+              later(900, () => set('idle'))
+              later(4200, () => presence.update({ caption: null }))
+            }),
+          )
+        })
+      })
+    }
+    const route = (text: string) => (SERVICE_PATTERN.test(text) ? runServiceCheck : TASK_PATTERN.test(text) ? runTask : respond)
 
     const respond = () => {
       set('understanding', { transcript: null })
@@ -229,7 +262,7 @@ export function DemoConductor() {
       clear()
       const said = presence.getSnapshot().transcript
       if (said) conversation.add('user', said.replace(/…$/, ''))
-      if (said) later(500, TASK_PATTERN.test(said) ? runTask : respond)
+      if (said) later(500, route(said))
       else set('idle', { transcript: null })
     })
 
@@ -237,7 +270,7 @@ export function DemoConductor() {
       clear()
       presence.update({ caption: null, transcript: text })
       conversation.add('user', text)
-      later(900, TASK_PATTERN.test(text) ? runTask : respond)
+      later(900, route(text))
     })
 
     // Tools opened from the dock: the runtime would decide what to show.
@@ -246,17 +279,19 @@ export function DemoConductor() {
       if (TITLES[kind]) workspace.open(kind, TITLES[kind], SAMPLE[kind] ?? {})
     })
 
-    // Review shortcut: W runs the work scene.
+    // Review shortcuts: W runs the multi-tool trip scene, S the service check.
+    const scene = (utterance: string, run: () => void) => {
+      clear()
+      workspace.closeAll()
+      presence.update({ transcript: utterance, caption: null })
+      conversation.add('user', utterance)
+      later(600, run)
+    }
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
-      if (t.tagName === 'INPUT' || e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key === 'w' || e.key === 'W') {
-        clear()
-        workspace.closeAll()
-        presence.update({ transcript: SAMPLE_UTTERANCE, caption: null })
-        conversation.add('user', SAMPLE_UTTERANCE)
-        later(600, runTask)
-      }
+      if (t.tagName === 'INPUT' || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
+      if (e.key === 'w' || e.key === 'W') scene(SAMPLE_UTTERANCE, runTask)
+      else if (e.key === 's' || e.key === 'S') scene('Open the terminal and check the service', runServiceCheck)
     }
     window.addEventListener('keydown', onKey)
 

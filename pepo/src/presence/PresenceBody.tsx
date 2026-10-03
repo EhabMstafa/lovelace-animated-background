@@ -52,6 +52,8 @@ const TILT = new THREE.Euler(0.18, 0, -0.12)
 const SWITCH_SECONDS = 0.35
 
 export const CAMERA_Z = 8.2
+/** Final motion pass: ambient movement kept ~12% quieter than first drafted. */
+const AMBIENT = 0.88
 
 interface PresenceBodyProps {
   state: PresenceState
@@ -249,6 +251,9 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     const c = clock.current
     const p = params.current
     const target = ORB_STATES[state]
+    // Back after a pause (the Avatar was shown, or the tab was hidden): join
+    // the current state at once instead of easing in from a stale one.
+    if (rawDt > 0.5) for (const key of PARAM_KEYS) p[key] = target[key]
 
     for (const key of PARAM_KEYS) {
       // Anticipation: the Orb leans in a little faster than it settles.
@@ -262,8 +267,8 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     c.energy = state === 'speaking' ? sig.speak : sig.listen
 
     c.t += dt * timeScale
-    c.rot += dt * timeScale * p.spin * Math.PI * 2 * 0.25
-    c.flow += dt * timeScale * p.activity * 0.6
+    c.rot += dt * timeScale * AMBIENT * p.spin * Math.PI * 2 * 0.25
+    c.flow += dt * timeScale * AMBIENT * p.activity * 0.6
 
     // Orb ↔ Avatar: the Orb fades away (FATHI fades in on its own canvas).
     const morphTarget = form === 'avatar' ? 1 : 0
@@ -324,7 +329,7 @@ export function PresenceBody({ state, form, reducedMotion, counts }: PresenceBod
     ORBITS.forEach((o, i) => {
       const group = orbitRefs.current[i]
       const mat = orbitMats[i]
-      mat.uniforms.uHead.value = (mat.uniforms.uHead.value + dt * timeScale * o.speed * (1 + p.activity * 0.8)) % 1
+      mat.uniforms.uHead.value = (mat.uniforms.uHead.value + dt * timeScale * AMBIENT * o.speed * (1 + p.activity * 0.8)) % 1
       mat.uniforms.uAlpha.value = o.alpha * (1 + p.organize * 0.6 + p.listen * c.energy * 0.8 + p.speak * c.energy * 0.5) * p.glow
       mat.uniforms.uViolet.value = p.violet
       const nodeMat = nodeMats[i]
