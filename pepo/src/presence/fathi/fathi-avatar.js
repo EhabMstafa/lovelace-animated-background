@@ -472,7 +472,7 @@ export async function createFathiAvatar(canvas, opts={}){
         float speechGlow=(1.0+uJaw*.06*aWarm)*mix(uPresence.x,uPresence.y,aWarm);
         vA=lum*uPointGain*edge*smoothstep(-1.96,-1.74,position.y)*finish.x*speechGlow
           *(1.0+lip*(.65+uJaw*.22));
-        vA*=1.0-.70*pupilMask(position,aWarm); // PEPO: softer pupils
+        vA*=1.0-.85*pupilMask(position,aWarm); // PEPO: softer pupils
         vCol=mix(mix(uCyan,uAmber,finish.y),vec3(1.0,.50,.30),lip*(.42+uJaw*.08));
         vCol=mix(vCol,vec3(1.0,.53,.29),uPresence.z*.22*(1.0-aWarm));
         gl_PointSize=clamp(uSize*uProj/-mv.z,1.0,uMaxPx);
